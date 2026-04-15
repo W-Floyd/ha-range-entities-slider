@@ -14,7 +14,7 @@
  *     icon: mdi:thermometer                # optional
  */
 (() => {
-  'use strict';
+  "use strict";
 
   // Exact styles from hui-input-number-entity-row, plus range-thumb fixes
   const STYLES = `
@@ -56,17 +56,21 @@
       this._config = null;
       this._interacting = false;
       this._initialized = false;
-      this.attachShadow({ mode: 'open' });
+      this.attachShadow({ mode: "open" });
     }
 
     // ── Config ────────────────────────────────────────────────────────────────
 
     setConfig(config) {
       if (!config.entity) {
-        throw new Error('[range-entity-row] "entity" is required (lower handle)');
+        throw new Error(
+          '[range-entity-row] "entity" is required (lower handle)',
+        );
       }
       if (!config.range_entity) {
-        throw new Error('[range-entity-row] "range_entity" is required (upper handle)');
+        throw new Error(
+          '[range-entity-row] "range_entity" is required (upper handle)',
+        );
       }
       this._config = config;
       if (this._rowEl) {
@@ -92,9 +96,12 @@
       const cfg = { entity: this._config.entity };
       if (this._config.name !== undefined) cfg.name = this._config.name;
       if (this._config.icon !== undefined) cfg.icon = this._config.icon;
-      if (this._config.tap_action !== undefined) cfg.tap_action = this._config.tap_action;
-      if (this._config.hold_action !== undefined) cfg.hold_action = this._config.hold_action;
-      if (this._config.double_tap_action !== undefined) cfg.double_tap_action = this._config.double_tap_action;
+      if (this._config.tap_action !== undefined)
+        cfg.tap_action = this._config.tap_action;
+      if (this._config.hold_action !== undefined)
+        cfg.hold_action = this._config.hold_action;
+      if (this._config.double_tap_action !== undefined)
+        cfg.double_tap_action = this._config.double_tap_action;
       return cfg;
     }
 
@@ -126,33 +133,33 @@
     // ── Build DOM (once) ──────────────────────────────────────────────────────
 
     _build() {
-      const style = document.createElement('style');
+      const style = document.createElement("style");
       style.textContent = STYLES;
 
       // hui-generic-entity-row handles the icon, name, and row layout —
       // the same element hui-input-number-entity-row uses
-      this._rowEl = document.createElement('hui-generic-entity-row');
+      this._rowEl = document.createElement("hui-generic-entity-row");
 
       // .flex + ha-slider + .state mirrors hui-input-number-entity-row exactly
-      const flex = document.createElement('div');
-      flex.className = 'flex';
+      const flex = document.createElement("div");
+      flex.className = "flex";
 
-      this._slider = document.createElement('ha-slider');
-      this._slider.setAttribute('range', '');
+      this._slider = document.createElement("ha-slider");
+      this._slider.setAttribute("range", "");
 
-      this._stateEl = document.createElement('span');
-      this._stateEl.className = 'state';
+      this._stateEl = document.createElement("span");
+      this._stateEl.className = "state";
 
       flex.append(this._slider, this._stateEl);
       this._rowEl.appendChild(flex);
       this.shadowRoot.append(style, this._rowEl);
 
       // Track active interaction so hass updates don't snap the slider mid-drag
-      this._slider.addEventListener('input', () => {
+      this._slider.addEventListener("input", () => {
         this._interacting = true;
       });
 
-      this._slider.addEventListener('change', () => {
+      this._slider.addEventListener("change", () => {
         this._interacting = false;
         this._onSliderChange();
       });
@@ -179,10 +186,13 @@
         this._slider.maxValue = Math.max(lowerVal, upperVal);
       }
 
-      // State label: "20–25 °C"  (mirrors hass.formatEntityState on each entity)
-      const fmt = (stateObj) =>
-        this._hass.formatEntityState?.(stateObj) ?? stateObj.state;
-      this._stateEl.textContent = `${fmt(lower)}–${fmt(upper)}`;
+      const unit = lower.attributes.unit_of_measurement
+        ?? upper.attributes.unit_of_measurement
+        ?? '';
+      const lv = Math.min(lowerVal, upperVal);
+      const uv = Math.max(lowerVal, upperVal);
+      const fmt = (v) => `${v}${unit ? `\u00a0${unit}` : ''}`;
+      this._stateEl.innerHTML = `${fmt(lv)}<br>${fmt(uv)}`;
     }
 
     // ── Commit changed values to HA ───────────────────────────────────────────
@@ -200,25 +210,26 @@
     }
 
     _callService(entityId, value) {
-      this._hass.callService('input_number', 'set_value', {
+      this._hass.callService("input_number", "set_value", {
         entity_id: entityId,
         value,
       });
     }
   }
 
-  customElements.define('range-entity-row', RangeEntityRow);
+  customElements.define("range-entity-row", RangeEntityRow);
 
   window.customCards = window.customCards || [];
   window.customCards.push({
-    type: 'range-entity-row',
-    name: 'Range Entity Row',
-    description: 'Two input_number entities as a single dual-handle range slider.',
+    type: "range-entity-row",
+    name: "Range Entity Row",
+    description:
+      "Two input_number entities as a single dual-handle range slider.",
   });
 
   console.info(
-    '%c RANGE-ENTITY-ROW %c Loaded ',
-    'color:#fff;background:#4caf50;font-weight:bold;padding:2px 4px;border-radius:3px 0 0 3px',
-    'color:#4caf50;background:#f0f0f0;font-weight:bold;padding:2px 4px;border-radius:0 3px 3px 0',
+    "%c RANGE-ENTITY-ROW %c Loaded ",
+    "color:#fff;background:#4caf50;font-weight:bold;padding:2px 4px;border-radius:3px 0 0 3px",
+    "color:#4caf50;background:#f0f0f0;font-weight:bold;padding:2px 4px;border-radius:0 3px 3px 0",
   );
 })();
