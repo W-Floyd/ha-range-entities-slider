@@ -149,7 +149,6 @@ class RangeEntityRow extends LitElement {
         const sliderShadow = slider.shadowRoot;
         if (!sliderShadow) return;
 
-        // Inject CSS override once to fix range slider styling
         if (!sliderShadow.querySelector("#range-slider-fix")) {
           const style = document.createElement("style");
           style.id = "range-slider-fix";
