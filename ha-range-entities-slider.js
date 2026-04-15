@@ -175,11 +175,6 @@ class RangeEntityRow extends LitElement {
         width: 100%;
         max-width: 200px;
       }
-      ha-slider::part(thumb-min),
-      ha-slider::part(thumb-max) {
-        background-color: var(--primary-color);
-        border: none;
-      }
     `;
   }
 }
