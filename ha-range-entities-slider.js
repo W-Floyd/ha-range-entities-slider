@@ -1,9 +1,8 @@
 /**
  * range-entity-row
  *
- * Displays two input_number entities as a single dual-handle range slider,
- * using the same hui-generic-entity-row wrapper and ha-slider component
- * that hui-input-number-entity-row uses — inheriting all HA styling.
+ * Displays two input_number entities as a dual-slider entity row.
+ * Each slider is modeled exactly on hui-input-number-entity-row.
  *
  * Config (inside an entities card):
  *
@@ -13,223 +12,188 @@
  *     name: Temperature Range              # optional
  *     icon: mdi:thermometer                # optional
  */
-(() => {
-  "use strict";
+import { LitElement, html, css } from "https://unpkg.com/lit@2/index.js?module";
 
-  // Exact styles from hui-input-number-entity-row, plus range-thumb fixes
-  const STYLES = `
-    :host {
-      display: block;
+class RangeEntityRow extends LitElement {
+  static get properties() {
+    return {
+      hass: {},
+      config: {},
+      _lowerVal: { state: true },
+      _upperVal: { state: true },
+    };
+  }
+
+  constructor() {
+    super();
+    this._lowerVal = 0;
+    this._upperVal = 0;
+    this._interacting = false;
+  }
+
+  // ── Config ──────────────────────────────────────────────────────────────────
+
+  setConfig(config) {
+    if (!config.entity) {
+      throw new Error('[range-entity-row] "entity" is required (lower handle)');
     }
-    .flex {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      flex-grow: 2;
+    if (!config.range_entity) {
+      throw new Error('[range-entity-row] "range_entity" is required (upper handle)');
     }
-    .state {
-      min-width: 45px;
-      text-align: end;
-    }
-    ha-slider {
-      width: 100%;
-      max-width: 200px;
-    }
+    this.config = config;
+  }
 
-    /*
-     * ha-slider overrides #thumb for single-slider mode but not #thumb-min /
-     * #thumb-max used in range mode. Mirror those same overrides via ::part()
-     * so the range thumbs look identical to a normal ha-slider thumb.
-     */
-    ha-slider::part(thumb-min),
-    ha-slider::part(thumb-max) {
-      border: none;
-      background-color: var(--ha-slider-thumb-color, var(--primary-color));
-      overflow: hidden;
-    }
-  `;
+  // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-  class RangeEntityRow extends HTMLElement {
-    constructor() {
-      super();
-      this._hass = null;
-      this._config = null;
-      this._interacting = false;
-      this._initialized = false;
-      this.attachShadow({ mode: "open" });
-    }
-
-    // ── Config ────────────────────────────────────────────────────────────────
-
-    setConfig(config) {
-      if (!config.entity) {
-        throw new Error(
-          '[range-entity-row] "entity" is required (lower handle)',
-        );
-      }
-      if (!config.range_entity) {
-        throw new Error(
-          '[range-entity-row] "range_entity" is required (upper handle)',
-        );
-      }
-      this._config = config;
-      if (this._rowEl) {
-        this._rowEl.config = this._buildRowConfig();
-      }
-    }
-
-    // ── hass ──────────────────────────────────────────────────────────────────
-
-    set hass(hass) {
-      this._hass = hass;
-      if (!this._initialized) {
-        this._build();
-        this._initialized = true;
-      }
-      this._update();
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    _buildRowConfig() {
-      // Pass only the fields hui-generic-entity-row understands
-      const cfg = { entity: this._config.entity };
-      if (this._config.name !== undefined) cfg.name = this._config.name;
-      if (this._config.icon !== undefined) cfg.icon = this._config.icon;
-      if (this._config.tap_action !== undefined)
-        cfg.tap_action = this._config.tap_action;
-      if (this._config.hold_action !== undefined)
-        cfg.hold_action = this._config.hold_action;
-      if (this._config.double_tap_action !== undefined)
-        cfg.double_tap_action = this._config.double_tap_action;
-      return cfg;
-    }
-
-    _computeRange() {
-      const lower = this._hass.states[this._config.entity];
-      const upper = this._hass.states[this._config.range_entity];
-      if (!lower || !upper) return null;
-
-      return {
-        min: Math.min(
-          parseFloat(lower.attributes.min ?? 0),
-          parseFloat(upper.attributes.min ?? 0),
-        ),
-        max: Math.max(
-          parseFloat(lower.attributes.max ?? 100),
-          parseFloat(upper.attributes.max ?? 100),
-        ),
-        step: Math.min(
-          parseFloat(lower.attributes.step ?? 1),
-          parseFloat(upper.attributes.step ?? 1),
-        ),
-        lowerVal: parseFloat(lower.state),
-        upperVal: parseFloat(upper.state),
-        lower,
-        upper,
-      };
-    }
-
-    // ── Build DOM (once) ──────────────────────────────────────────────────────
-
-    _build() {
-      const style = document.createElement("style");
-      style.textContent = STYLES;
-
-      // hui-generic-entity-row handles the icon, name, and row layout —
-      // the same element hui-input-number-entity-row uses
-      this._rowEl = document.createElement("hui-generic-entity-row");
-
-      // .flex + ha-slider + .state mirrors hui-input-number-entity-row exactly
-      const flex = document.createElement("div");
-      flex.className = "flex";
-
-      this._slider = document.createElement("ha-slider");
-      this._slider.setAttribute("range", "");
-
-      this._stateEl = document.createElement("span");
-      this._stateEl.className = "state";
-
-      flex.append(this._slider, this._stateEl);
-      this._rowEl.appendChild(flex);
-      this.shadowRoot.append(style, this._rowEl);
-
-      // Track active interaction so hass updates don't snap the slider mid-drag
-      this._slider.addEventListener("input", () => {
-        this._interacting = true;
-      });
-
-      this._slider.addEventListener("change", () => {
-        this._interacting = false;
-        this._onSliderChange();
-      });
-    }
-
-    // ── Update DOM on each hass change ────────────────────────────────────────
-
-    _update() {
-      if (!this._hass || !this._config || !this._initialized) return;
-
-      this._rowEl.hass = this._hass;
-      this._rowEl.config = this._buildRowConfig();
-
+  updated(changedProps) {
+    if (changedProps.has("hass")) {
       const range = this._computeRange();
       if (!range) return;
-
-      const { min, max, step, lowerVal, upperVal, lower, upper } = range;
-
       if (!this._interacting) {
-        this._slider.min = min;
-        this._slider.max = max;
-        this._slider.step = step;
-        this._slider.minValue = Math.min(lowerVal, upperVal);
-        this._slider.maxValue = Math.max(lowerVal, upperVal);
+        this._lowerVal = Math.min(range.lowerVal, range.upperVal);
+        this._upperVal = Math.max(range.lowerVal, range.upperVal);
       }
-
-      const unit = lower.attributes.unit_of_measurement
-        ?? upper.attributes.unit_of_measurement
-        ?? '';
-      const lv = Math.min(lowerVal, upperVal);
-      const uv = Math.max(lowerVal, upperVal);
-      const fmt = (v) => `${v}${unit ? `\u00a0${unit}` : ''}`;
-      this._stateEl.innerHTML = `${fmt(lv)}<br>${fmt(uv)}`;
-    }
-
-    // ── Commit changed values to HA ───────────────────────────────────────────
-
-    _onSliderChange() {
-      const lower = this._hass?.states[this._config.entity];
-      const upper = this._hass?.states[this._config.range_entity];
-
-      if (lower && this._slider.minValue !== parseFloat(lower.state)) {
-        this._callService(this._config.entity, this._slider.minValue);
-      }
-      if (upper && this._slider.maxValue !== parseFloat(upper.state)) {
-        this._callService(this._config.range_entity, this._slider.maxValue);
-      }
-    }
-
-    _callService(entityId, value) {
-      this._hass.callService("input_number", "set_value", {
-        entity_id: entityId,
-        value,
-      });
     }
   }
 
-  customElements.define("range-entity-row", RangeEntityRow);
+  // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: "range-entity-row",
-    name: "Range Entity Row",
-    description:
-      "Two input_number entities as a single dual-handle range slider.",
-  });
+  _computeRange() {
+    if (!this.hass || !this.config) return null;
+    const lower = this.hass.states[this.config.entity];
+    const upper = this.hass.states[this.config.range_entity];
+    if (!lower || !upper) return null;
 
-  console.info(
-    "%c RANGE-ENTITY-ROW %c Loaded ",
-    "color:#fff;background:#4caf50;font-weight:bold;padding:2px 4px;border-radius:3px 0 0 3px",
-    "color:#4caf50;background:#f0f0f0;font-weight:bold;padding:2px 4px;border-radius:0 3px 3px 0",
-  );
-})();
+    return {
+      min: Math.min(
+        parseFloat(lower.attributes.min ?? 0),
+        parseFloat(upper.attributes.min ?? 0),
+      ),
+      max: Math.max(
+        parseFloat(lower.attributes.max ?? 100),
+        parseFloat(upper.attributes.max ?? 100),
+      ),
+      step: Math.min(
+        parseFloat(lower.attributes.step ?? 1),
+        parseFloat(upper.attributes.step ?? 1),
+      ),
+      lowerVal: parseFloat(lower.state),
+      upperVal: parseFloat(upper.state),
+      unit: lower.attributes.unit_of_measurement
+        ?? upper.attributes.unit_of_measurement
+        ?? "",
+    };
+  }
+
+  _buildRowConfig() {
+    const cfg = { entity: this.config.entity };
+    if (this.config.name !== undefined) cfg.name = this.config.name;
+    if (this.config.icon !== undefined) cfg.icon = this.config.icon;
+    if (this.config.tap_action !== undefined) cfg.tap_action = this.config.tap_action;
+    if (this.config.hold_action !== undefined) cfg.hold_action = this.config.hold_action;
+    if (this.config.double_tap_action !== undefined) cfg.double_tap_action = this.config.double_tap_action;
+    return cfg;
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  render() {
+    if (!this.hass || !this.config) return html``;
+    const range = this._computeRange();
+    if (!range) return html``;
+
+    const { min, max, step, unit } = range;
+    const fmt = (v) => `${v}${unit ? `\u00a0${unit}` : ""}`;
+
+    return html`
+      <hui-generic-entity-row
+        .hass=${this.hass}
+        .config=${this._buildRowConfig()}
+      >
+        <div class="flex">
+          <ha-slider
+            labeled
+            range
+            .min=${min}
+            .max=${max}
+            .step=${step}
+            .minValue=${this._lowerVal}
+            .maxValue=${this._upperVal}
+            @input=${this._onInput}
+            @change=${this._onChange}
+          ></ha-slider>
+          <span class="state">${fmt(this._lowerVal)}<br />${fmt(this._upperVal)}</span>
+        </div>
+      </hui-generic-entity-row>
+    `;
+  }
+
+  // ── Slider events ───────────────────────────────────────────────────────────
+
+  _onInput(ev) {
+    this._interacting = true;
+    this._lowerVal = ev.target.minValue;
+    this._upperVal = ev.target.maxValue;
+  }
+
+  _onChange(ev) {
+    this._interacting = false;
+    const lower = this.hass?.states[this.config.entity];
+    const upper = this.hass?.states[this.config.range_entity];
+    if (lower && ev.target.minValue !== parseFloat(lower.state)) {
+      this._callService(this.config.entity, ev.target.minValue);
+    }
+    if (upper && ev.target.maxValue !== parseFloat(upper.state)) {
+      this._callService(this.config.range_entity, ev.target.maxValue);
+    }
+  }
+
+  // ── HA service call ─────────────────────────────────────────────────────────
+
+  _callService(entityId, value) {
+    this.hass.callService("input_number", "set_value", { entity_id: entityId, value });
+  }
+
+  // ── Styles ──────────────────────────────────────────────────────────────────
+
+  static get styles() {
+    return css`
+      :host {
+        display: block;
+      }
+      .flex {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+      }
+      .state {
+        min-width: 45px;
+        text-align: end;
+      }
+      ha-slider {
+        width: 100%;
+        flex: 1;
+      }
+      ha-slider::part(thumb-min),
+      ha-slider::part(thumb-max) {
+        background-color: var(--primary-color);
+        border: none;
+      }
+    `;
+  }
+}
+
+customElements.define("range-entity-row", RangeEntityRow);
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "range-entity-row",
+  name: "Range Entity Row",
+  description: "Two input_number entities as a dual-slider entity row.",
+});
+
+console.info(
+  "%c RANGE-ENTITY-ROW %c Loaded ",
+  "color:#fff;background:#4caf50;font-weight:bold;padding:2px 4px;border-radius:3px 0 0 3px",
+  "color:#4caf50;background:#f0f0f0;font-weight:bold;padding:2px 4px;border-radius:0 3px 3px 0",
+);
