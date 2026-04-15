@@ -16,7 +16,7 @@
 (() => {
   'use strict';
 
-  // Exact styles from hui-input-number-entity-row
+  // Exact styles from hui-input-number-entity-row, plus range-thumb fixes
   const STYLES = `
     :host {
       display: block;
@@ -34,6 +34,18 @@
     ha-slider {
       width: 100%;
       max-width: 200px;
+    }
+
+    /*
+     * ha-slider overrides #thumb for single-slider mode but not #thumb-min /
+     * #thumb-max used in range mode. Mirror those same overrides via ::part()
+     * so the range thumbs look identical to a normal ha-slider thumb.
+     */
+    ha-slider::part(thumb-min),
+    ha-slider::part(thumb-max) {
+      border: none;
+      background-color: var(--ha-slider-thumb-color, var(--primary-color));
+      overflow: hidden;
     }
   `;
 
