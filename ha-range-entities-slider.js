@@ -38,7 +38,9 @@ class RangeEntityRow extends LitElement {
       throw new Error('[range-entity-row] "entity" is required (lower handle)');
     }
     if (!config.range_entity) {
-      throw new Error('[range-entity-row] "range_entity" is required (upper handle)');
+      throw new Error(
+        '[range-entity-row] "range_entity" is required (upper handle)',
+      );
     }
     this.config = config;
   }
@@ -54,6 +56,10 @@ class RangeEntityRow extends LitElement {
         this._upperVal = Math.max(range.lowerVal, range.upperVal);
       }
     }
+
+    // Fix material-you theme compatibility for range sliders
+    // Run this on every update to ensure it stays applied
+    this._fixMaterialYouRangeSlider();
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -79,9 +85,10 @@ class RangeEntityRow extends LitElement {
       ),
       lowerVal: parseFloat(lower.state),
       upperVal: parseFloat(upper.state),
-      unit: lower.attributes.unit_of_measurement
-        ?? upper.attributes.unit_of_measurement
-        ?? "",
+      unit:
+        lower.attributes.unit_of_measurement ??
+        upper.attributes.unit_of_measurement ??
+        "",
     };
   }
 
@@ -89,9 +96,12 @@ class RangeEntityRow extends LitElement {
     const cfg = { entity: this.config.entity };
     if (this.config.name !== undefined) cfg.name = this.config.name;
     if (this.config.icon !== undefined) cfg.icon = this.config.icon;
-    if (this.config.tap_action !== undefined) cfg.tap_action = this.config.tap_action;
-    if (this.config.hold_action !== undefined) cfg.hold_action = this.config.hold_action;
-    if (this.config.double_tap_action !== undefined) cfg.double_tap_action = this.config.double_tap_action;
+    if (this.config.tap_action !== undefined)
+      cfg.tap_action = this.config.tap_action;
+    if (this.config.hold_action !== undefined)
+      cfg.hold_action = this.config.hold_action;
+    if (this.config.double_tap_action !== undefined)
+      cfg.double_tap_action = this.config.double_tap_action;
     return cfg;
   }
 
@@ -122,10 +132,64 @@ class RangeEntityRow extends LitElement {
             @input=${this._onInput}
             @change=${this._onChange}
           ></ha-slider>
-          <span class="state">${fmt(this._lowerVal)}<br />${fmt(this._upperVal)}</span>
+          <span class="state"
+            >${fmt(this._lowerVal)}<br />${fmt(this._upperVal)}</span
+          >
         </div>
       </hui-generic-entity-row>
     `;
+  }
+
+  _fixMaterialYouRangeSlider() {
+    try {
+      const slider = this.shadowRoot?.querySelector("ha-slider");
+      if (!slider?.hasAttribute("range")) return;
+
+      setTimeout(() => {
+        const sliderShadow = slider.shadowRoot;
+        if (!sliderShadow) return;
+
+        // Inject CSS override once to fix range slider styling
+        if (!sliderShadow.querySelector("#range-slider-fix")) {
+          const style = document.createElement("style");
+          style.id = "range-slider-fix";
+          style.textContent = `
+            /* Apply same thumb styling to range slider thumbs */
+            :host([range]) #thumb-min,
+            :host([range]) #thumb-max {
+              overflow: visible;
+              background: var(--ha-slider-thumb-negative-color);
+              border-radius: 0;
+              transition:
+                width var(--md-sys-motion-expressive-spatial-default),
+                left var(--md-sys-motion-expressive-spatial-default);
+            }
+            :host([range]) #thumb-min::before,
+            :host([range]) #thumb-max::before {
+              content: '';
+              position: absolute;
+              height: var(--thumb-actual-height);
+              width: 4px;
+              top: calc(-0.5 * (var(--thumb-actual-height) - var(--ha-slider-track-size)));
+              left: 50%;
+              transform: translateX(-50%);
+              border-radius: var(--md-sys-shape-corner-full);
+              background: var(--md-sys-color-primary);
+            }
+            :host([range]) #indicator::after {
+              display: none !important;
+            }
+            :host([range]) #indicator {
+              margin-inline-end: 0 !important;
+              box-shadow: none !important;
+            }
+          `;
+          sliderShadow.appendChild(style);
+        }
+      }, 50);
+    } catch (e) {
+      console.debug("Could not fix material-you range slider:", e);
+    }
   }
 
   // ── Slider events ───────────────────────────────────────────────────────────
@@ -151,7 +215,10 @@ class RangeEntityRow extends LitElement {
   // ── HA service call ─────────────────────────────────────────────────────────
 
   _callService(entityId, value) {
-    this.hass.callService("input_number", "set_value", { entity_id: entityId, value });
+    this.hass.callService("input_number", "set_value", {
+      entity_id: entityId,
+      value,
+    });
   }
 
   // ── Styles ──────────────────────────────────────────────────────────────────
@@ -174,6 +241,11 @@ class RangeEntityRow extends LitElement {
       ha-slider {
         width: 100%;
         max-width: 200px;
+      }
+      /* Override material-you styles for range sliders */
+      ha-slider::part(indicator) {
+        margin-inline-end: 0 !important;
+        box-shadow: none !important;
       }
     `;
   }
