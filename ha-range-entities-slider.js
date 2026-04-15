@@ -165,6 +165,7 @@ class RangeEntityRow extends LitElement {
         display: flex;
         align-items: center;
         justify-content: flex-end;
+        flex-grow: 2;
       }
       .state {
         min-width: 45px;
@@ -172,7 +173,7 @@ class RangeEntityRow extends LitElement {
       }
       ha-slider {
         width: 100%;
-        flex: 1;
+        max-width: 200px;
       }
       ha-slider::part(thumb-min),
       ha-slider::part(thumb-max) {
