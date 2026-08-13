@@ -129,13 +129,3 @@ changelog:
       echo "Changes since ${previous}:"
       git log --oneline "${previous}..HEAD"
     fi
-
-# Symlink the card into a local HA config's www/ for development
-link config_dir:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    target="{{ config_dir }}/www/{{ js }}"
-    mkdir -p "{{ config_dir }}/www"
-    ln -sf "$(pwd)/{{ js }}" "$target"
-    echo "linked -> $target"
-    echo "add /local/{{ js }} as a JavaScript module resource in HA"
