@@ -14,7 +14,7 @@
 #   KEEP_HA=1       leave Home Assistant running after the test
 #   STRICT_THUMBS=0 warn instead of fail if the Material You patch stops applying
 #   SWEEP_THEMES=1  also install the custom themes and screenshot the row in each
-#   STRICT_THEMES=1 fail if the range handles are invisible under any theme
+#   STRICT_THEMES=0 warn instead of fail if a theme leaves the handle unpainted
 #
 set -euo pipefail
 
@@ -79,7 +79,7 @@ docker run --rm \
   -e OUT_DIR=/out \
   -e STRICT_THUMBS="${STRICT_THUMBS:-1}" \
   -e SWEEP_THEMES="${SWEEP_THEMES:-0}" \
-  -e STRICT_THEMES="${STRICT_THEMES:-0}" \
+  -e STRICT_THEMES="${STRICT_THEMES:-1}" \
   -e THEME_FILTER="${THEME_FILTER:-}" \
   -e ALL_THEMES="${ALL_THEMES:-0}" \
   "$RENDER_IMAGE" node /tests/render.mjs || status=$?

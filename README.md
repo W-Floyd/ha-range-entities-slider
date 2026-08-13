@@ -170,11 +170,11 @@ ALL_THEMES=1 just render-themes                       # every installed theme
 THEME_FILTER="Graphite,Catppuccin" just render-themes  # substring match
 ```
 
-It reports whether the range handle gets a painted body under each theme. Only Material You defines
-`--md-sys-color-primary`, which the patch uses to draw the handle bar — under the other packs the
-handle reads as a gap in the track instead. The sweep measures with the patch detached too, which
-confirms Home Assistant does not paint it either, so this is a gap rather than a regression; it is a
-warning, and `STRICT_THEMES=1` turns it into a failure.
+It checks that the range handle gets a painted body under every theme swept, and fails if one does
+not (`STRICT_THEMES=0` downgrades that to a warning). This is what caught the handles rendering as a
+bare gap in the track under all seven non-Material-You packs: the styling depends on `--md-sys-*`
+variables that only the material-you theme defines, and now falls back to `--primary-color` and
+fixed sizes elsewhere.
 
 **Every change documents itself.** Add entries under `## [Unreleased]` in
 [CHANGELOG.md](CHANGELOG.md) as part of the change, in the same commit. `just bump` promotes that

@@ -22,8 +22,17 @@ promotes that section to the new version and refuses to run if it is empty.
   patch surface before users hit them.
 - Theme sweep (`just render-themes`): installs the Material You, Catppuccin,
   visionOS, Metrology, Graphite, iOS, and macOS theme packs and screenshots the
-  row under a curated selection, reporting whether the range handle gets a
-  painted body under each. Runs weekly in CI.
+  row under a curated selection, failing if the range handle is left unpainted
+  under any of them. Runs weekly in CI.
+
+### Fixed
+
+- Range handles were invisible under every theme except material-you, showing
+  only as a gap in the track. The handle styling relied on `--md-sys-color-primary`,
+  `--thumb-actual-height`, and `--ha-slider-track-size`, which only the
+  material-you theme defines, so elsewhere the handle bar computed to zero height
+  in an undefined colour. These now fall back to `--primary-color` and fixed
+  sizes; material-you renders pixel-identically to before.
 
 ## [0.1.0] - 2026-08-13
 

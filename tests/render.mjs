@@ -20,7 +20,7 @@ const HA_VERSION = process.env.HA_VERSION ?? "stable";
 const OUT_DIR = process.env.OUT_DIR ?? "/out";
 const STRICT_THUMBS = (process.env.STRICT_THUMBS ?? "1") !== "0";
 const SWEEP_THEMES = process.env.SWEEP_THEMES === "1";
-const STRICT_THEMES = process.env.STRICT_THEMES === "1";
+const STRICT_THEMES = (process.env.STRICT_THEMES ?? "1") !== "0";
 const THEME_FILTER = process.env.THEME_FILTER ?? "";
 const ALL_THEMES = process.env.ALL_THEMES === "1";
 
@@ -489,7 +489,7 @@ try {
     const unpainted = results.filter((r) => !r.error && !r.painted);
     const summary =
       `${unpainted.length}/${results.length} theme+mode combinations draw the handle as a ` +
-      `track gap only — --md-sys-color-primary is a Material You variable`;
+      `track gap only, with no painted handle`;
     console.log(`\n${summary}`);
     console.log(`screenshots in ${themeDir}`);
     if (unpainted.length) {

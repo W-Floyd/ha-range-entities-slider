@@ -156,27 +156,38 @@ class RangeEntityRow extends LitElement {
           const style = document.createElement("style");
           style.id = "range-slider-fix";
           style.textContent = `
-            /* Apply same thumb styling to range slider thumbs */
+            /* Apply same thumb styling to range slider thumbs.
+               The --md-sys-* and --thumb-* variables only exist under the
+               material-you theme. Without fallbacks the handle bar computes to
+               zero height in an undefined colour, so under every other theme
+               the handle vanished and only a gap in the track marked it. The
+               fallbacks are inert wherever material-you defines these. */
             :host([range]) #thumb-min,
             :host([range]) #thumb-max {
+              --range-thumb-height: var(--thumb-actual-height, 20px);
+              --range-track-size: var(--ha-slider-track-size, 4px);
+              --range-thumb-color: var(
+                --md-sys-color-primary,
+                var(--primary-color, #03a9f4)
+              );
               overflow: visible;
-              background: var(--ha-slider-thumb-negative-color);
+              background: var(--ha-slider-thumb-negative-color, transparent);
               border-radius: 0;
               transition:
-                width var(--md-sys-motion-expressive-spatial-default),
-                left var(--md-sys-motion-expressive-spatial-default);
+                width var(--md-sys-motion-expressive-spatial-default, 0.2s ease),
+                left var(--md-sys-motion-expressive-spatial-default, 0.2s ease);
             }
             :host([range]) #thumb-min::before,
             :host([range]) #thumb-max::before {
               content: '';
               position: absolute;
-              height: var(--thumb-actual-height);
+              height: var(--range-thumb-height);
               width: 4px;
-              top: calc(-0.5 * (var(--thumb-actual-height) - var(--ha-slider-track-size)));
+              top: calc(-0.5 * (var(--range-thumb-height) - var(--range-track-size)));
               left: 50%;
               transform: translateX(-50%);
-              border-radius: var(--md-sys-shape-corner-full);
-              background: var(--md-sys-color-primary);
+              border-radius: var(--md-sys-shape-corner-full, 2px);
+              background: var(--range-thumb-color);
             }
             :host([range]) #indicator::after {
               display: none !important;
