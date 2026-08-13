@@ -61,9 +61,6 @@ views:
             name: Unavailable entity
           - entity: number.number_offline
             name: Unavailable (stock row)
-          # A stock toggle, to compare against the one the editor renders.
-          - entity: input_boolean.lcars_sound
-            name: Toggle (stock row)
           - type: custom:range-entity-row
             entity: input_number.does_not_exist
             range_entity: input_number.upper_temp

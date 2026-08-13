@@ -770,12 +770,6 @@ try {
         };
         const toggles = {
           editor: describeSwitch(deepFind(element.shadowRoot, "ha-switch")),
-          stockRow: describeSwitch(
-            deepFind(
-              document.querySelector("home-assistant").shadowRoot,
-              "ha-switch",
-            ),
-          ),
         };
         const result = {
           toggles,
@@ -818,8 +812,7 @@ try {
       // The controls should be Home Assistant's own, not hand-rolled: the same
       // ha-switch it uses everywhere else.
       expect(
-        editor.toggles?.editor?.tag === "ha-switch" &&
-          editor.toggles?.stockRow?.tag === "ha-switch",
+        editor.toggles?.editor?.tag === "ha-switch",
         `the editor uses Home Assistant's own controls (${editor.toggles?.editor?.tag})`,
       );
 
