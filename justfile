@@ -1,6 +1,7 @@
 set shell := ["bash", "-uc"]
 
 js := "ha-range-entities-slider.js"
+changelog := "node scripts/changelog.mjs"
 
 # List available recipes
 default:
@@ -32,6 +33,12 @@ check:
       exit 1
     fi
     echo "ok: hacs.json filename matches the card"
+
+    if {{ changelog }} has-unreleased; then
+      echo "ok: CHANGELOG.md has entries under [Unreleased]"
+    else
+      echo "warning: CHANGELOG.md has no entries under [Unreleased] — 'just bump' will refuse to run" >&2
+    fi
 
     version="$(just version)"
     if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null; then
@@ -77,13 +84,22 @@ bump level="patch":
       exit 1
     fi
 
+    # Refuse to release undocumented changes: entries are written under
+    # [Unreleased] as part of each change, and promoted here.
+    if ! {{ changelog }} has-unreleased; then
+      echo "error: CHANGELOG.md has no entries under [Unreleased] — describe the change there first" >&2
+      exit 1
+    fi
+
     # BSD sed (macOS) requires an argument to -i.
     sed -i.bak -E "s/const VERSION = \"[0-9]+\.[0-9]+\.[0-9]+\"/const VERSION = \"${next}\"/" {{ js }}
     rm -f {{ js }}.bak
 
+    {{ changelog }} promote "${next}" "$(date +%F)"
+
     just check
 
-    git add {{ js }}
+    git add {{ js }} CHANGELOG.md
     git commit -m "Release v${next}"
     git tag -a "v${next}" -m "v${next}"
     echo "bumped ${current} -> ${next} and tagged v${next}; run 'just release' to publish"
@@ -109,23 +125,30 @@ release:
 
     git push origin HEAD
     git push origin "${tag}"
-    # The card is attached as a release asset: HACS prefers a matching asset
-    # over the repo root when one is present.
-    gh release create "${tag}" --title "${tag}" --generate-notes {{ js }}
+    # Release notes come from the CHANGELOG section for this version, not from
+    # raw commit subjects. The card is attached as a release asset: HACS prefers
+    # a matching asset over the repo root when one is present.
+    gh release create "${tag}" --title "${tag}" \
+      --notes "$({{ changelog }} notes "${version}")" {{ js }}
     echo "released ${tag}"
 
 # Bump and release in one step (level: patch | minor | major)
 publish level="patch": (bump level) release
 
-# Show what a release would include since the previous tag
+# Show the pending [Unreleased] entries that the next bump will promote
 changelog:
     #!/usr/bin/env bash
     set -euo pipefail
-    previous="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)"
-    if [[ -z "$previous" ]]; then
-      echo "No previous tag; all commits:"
-      git log --oneline
+    if {{ changelog }} has-unreleased; then
+      {{ changelog }} unreleased
     else
-      echo "Changes since ${previous}:"
-      git log --oneline "${previous}..HEAD"
+      echo "CHANGELOG.md has no entries under [Unreleased]"
     fi
+
+# Show the release notes recorded for a version (defaults to the current one)
+notes version="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="{{ version }}"
+    [[ -n "$version" ]] || version="$(just version)"
+    {{ changelog }} notes "$version"

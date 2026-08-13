@@ -106,6 +106,40 @@ The name and icon default to those of the `entity` (lower handle) when not set.
 - This is an entity **row**, not a standalone card. It must live inside a card that accepts rows,
   such as the Entities card.
 
+## Development
+
+Task running uses [just](https://github.com/casey/just); `just` on its own lists the recipes.
+
+| Recipe                | What it does                                                          |
+| --------------------- | --------------------------------------------------------------------- |
+| `just check`          | Parses the card as an ES module, validates `hacs.json`, flags version/tag drift |
+| `just fmt`            | Formats with prettier (`fmt-check` to verify only)                     |
+| `just changelog`      | Shows the pending `[Unreleased]` entries                               |
+| `just bump <level>`   | Promotes `[Unreleased]`, rewrites `VERSION`, commits, and tags         |
+| `just release`        | Pushes the commit and tag, then creates the GitHub release             |
+| `just publish <level>`| `bump` followed by `release`                                           |
+| `just notes [version]`| Prints the notes recorded for a version                                |
+
+**Every change documents itself.** Add entries under `## [Unreleased]` in
+[CHANGELOG.md](CHANGELOG.md) as part of the change, in the same commit. `just bump` promotes that
+section to the new version with today's date and **refuses to run when it is empty**, and
+`just release` uses that section as the GitHub release notes — so notes never come from raw commit
+subjects.
+
+The version lives in one place: the `VERSION` const in `ha-range-entities-slider.js`, which is also
+printed to the browser console when the card loads. Tags are derived from it as `vX.Y.Z`.
+
+```bash
+# after editing the card and adding a CHANGELOG entry
+just check
+just bump minor    # patch | minor | major
+just release
+```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [MIT](LICENSE)
