@@ -175,7 +175,11 @@ the row under a curated selection of them:
 | [macOS-Theme](https://github.com/JuanMTech/macOS-Theme) | macOS Theme |
 
 The packs expand to 56 themes, so the sweep renders a representative pair per pack rather than every
-accent colour, and skips the "Do Not Use" base themes the packs ship for inheritance.
+accent colour, and skips the "Do Not Use" base themes the packs ship for inheritance. Each theme is
+captured in light and dark only when that makes a difference: a theme that declares its colours
+outright, or declares light and dark modes with identical values, is captured once and its screenshot
+carries no mode suffix. That is decided by comparing how the theme actually resolves, not just what it
+declares, and the run reports which themes were captured once.
 
 ```bash
 just render-themes

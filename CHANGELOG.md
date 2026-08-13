@@ -20,6 +20,10 @@ promotes that section to the new version and refuses to run if it is empty.
 - `Render` workflow running that test against Home Assistant `stable` and `beta`
   on push and weekly, so upstream frontend changes that break the shadow-DOM
   patch surface before users hit them.
+- The theme sweep captures a theme in both light and dark only when the two
+  actually differ, comparing how the theme resolves rather than what it declares:
+  6 of the 12 curated themes render identically either way, so 24 combinations
+  become 18 and their screenshots lose the misleading mode suffix.
 - Theme sweep (`just render-themes`): installs the Material You, Catppuccin,
   visionOS, Metrology, Graphite, iOS, and macOS theme packs and screenshots the
   row under a curated selection, failing if the range handle is left unpainted

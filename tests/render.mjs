@@ -12,7 +12,7 @@
  * verified to pass on both stable and beta; set STRICT_THUMBS=0 to downgrade it
  * to a warning if upstream churn makes it noisy.
  */
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync } from "node:fs";
 import { chromium } from "playwright";
 
 const HA_URL = process.env.HA_URL ?? "http://ha:8123";
@@ -128,8 +128,12 @@ async function onboard() {
   return token;
 }
 
-/** Theme names Home Assistant has loaded, via the websocket API. */
-async function getThemeNames(token) {
+/**
+ * The themes Home Assistant has loaded, via the websocket API, each with
+ * whether it declares its own light/dark modes. A theme that does not is
+ * rendered identically whatever the browser prefers, so it only needs one pass.
+ */
+async function getThemes(token) {
   const url = `${HA_URL.replace(/^http/, "ws")}/api/websocket`;
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
@@ -151,7 +155,18 @@ async function getThemeNames(token) {
       } else if (message.type === "result") {
         clearTimeout(timer);
         socket.close();
-        resolve(Object.keys(message.result?.themes ?? {}).sort());
+        const themes = message.result?.themes ?? {};
+        resolve(
+          Object.keys(themes)
+            .sort()
+            .map((name) => ({
+              name,
+              // HA nests per-mode overrides under `modes: {light, dark}`.
+              hasModes: !!(
+                themes[name]?.modes?.light || themes[name]?.modes?.dark
+              ),
+            })),
+        );
       }
     });
     socket.addEventListener("error", (event) => {
@@ -187,6 +202,36 @@ async function setTheme(token, name) {
  * input_number row gets. Measured with the patch detached too, so the result is
  * attributed correctly: Home Assistant does not paint it either.
  */
+/**
+ * What the theme actually resolves to for this row. Themes that declare their
+ * colours outright — or declare light and dark modes with identical values —
+ * render the same whichever mode the browser asks for, so this is what decides
+ * whether a second capture is worth taking.
+ */
+const APPEARANCE_PROBE = (el) => {
+  const style = getComputedStyle(el);
+  const sliderShadow = el.shadowRoot?.querySelector("ha-slider")?.shadowRoot;
+  const part = (selector) => {
+    const node = sliderShadow?.querySelector(selector);
+    return node ? getComputedStyle(node).backgroundColor : "";
+  };
+  return [
+    style.color,
+    style.backgroundColor,
+    ...[
+      "--primary-color",
+      "--slider-color",
+      "--card-background-color",
+      "--primary-text-color",
+      "--md-sys-color-primary",
+      "--ha-slider-thumb-negative-color",
+    ].map((name) => style.getPropertyValue(name).trim()),
+    part("#track"),
+    part("#indicator"),
+    part("#thumb-min"),
+  ].join("|");
+};
+
 const HANDLE_PROBE = (el) => {
   const slider = el.shadowRoot?.querySelector("ha-slider");
   const sliderShadow = slider?.shadowRoot;
@@ -680,23 +725,25 @@ try {
   }
 
   if (SWEEP_THEMES) {
-    const installed = (await getThemeNames(token)).filter(
-      (name) => !EXCLUDED_THEMES.test(name),
+    const installed = (await getThemes(token)).filter(
+      ({ name }) => !EXCLUDED_THEMES.test(name),
     );
 
     let themes;
     if (THEME_FILTER) {
       const wanted = THEME_FILTER.split(",").map((s) => s.trim().toLowerCase());
-      themes = installed.filter((name) =>
+      themes = installed.filter(({ name }) =>
         wanted.some((w) => name.toLowerCase().includes(w)),
       );
     } else if (ALL_THEMES) {
       themes = installed;
     } else {
-      const available = new Map(installed.map((name) => [name.toLowerCase(), name]));
-      themes = CURATED_THEMES.map((name) => available.get(name.toLowerCase())).filter(
-        Boolean,
+      const available = new Map(
+        installed.map((theme) => [theme.name.toLowerCase(), theme]),
       );
+      themes = CURATED_THEMES.map((name) =>
+        available.get(name.toLowerCase()),
+      ).filter(Boolean);
       // A curated name that stops resolving means a pack renamed its themes.
       const missing = CURATED_THEMES.filter(
         (name) => !available.has(name.toLowerCase()),
@@ -715,6 +762,23 @@ try {
     const themeDir = `${OUT_DIR}/themes`;
     mkdirSync(themeDir, { recursive: true });
     const results = [];
+    const skipped = [];
+    const appearances = new Map();
+
+    // One capture stands for both modes: drop the now-misleading suffix and
+    // relabel the row.
+    const markStatic = (theme) => {
+      const slug = theme.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      for (const extra of ["", "-nopatch"]) {
+        const from = `${themeDir}/${slug}-light${extra}.png`;
+        const to = `${themeDir}/${slug}${extra}.png`;
+        // Do not claim a name another theme already holds: "Graphite" would
+        // otherwise take the file "Graphite Light" wrote.
+        if (existsSync(from) && !existsSync(to)) renameSync(from, to);
+      }
+      const row = results.find((r) => r.theme === theme);
+      if (row) row.colorScheme = "static";
+    };
 
     for (const colorScheme of ["light", "dark"]) {
       const context = await browser.newContext({
@@ -741,7 +805,14 @@ try {
       );
       const page = await context.newPage();
 
-      for (const theme of themes) {
+      for (const { name: theme, hasModes } of themes) {
+        // A theme that declares no light/dark modes of its own cannot render
+        // differently, so skip the second pass without even loading it.
+        if (colorScheme === "dark" && !hasModes) {
+          skipped.push(theme);
+          markStatic(theme);
+          continue;
+        }
         await setTheme(token, theme);
         await page.goto(`${HA_URL}/lovelace/0`, {
           waitUntil: "domcontentloaded",
@@ -756,14 +827,26 @@ try {
           continue;
         }
 
+        // Themes can declare modes whose values are identical; compare how the
+        // theme actually resolved before taking a second screenshot.
+        const appearance = await row.evaluate(APPEARANCE_PROBE);
+        if (colorScheme === "light") {
+          appearances.set(theme, appearance);
+        } else if (appearances.get(theme) === appearance) {
+          skipped.push(theme);
+          markStatic(theme);
+          continue;
+        }
+
         const handles = await row.evaluate(HANDLE_PROBE);
         results.push({ theme, colorScheme, ...handles });
 
         const slug = theme.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        const suffix = `-${colorScheme}`;
         await page
           .locator("hui-entities-card")
           .first()
-          .screenshot({ path: `${themeDir}/${slug}-${colorScheme}.png` });
+          .screenshot({ path: `${themeDir}/${slug}${suffix}.png` });
 
         if (process.env.DIAGNOSE_ZOOM === "1") {
           // A dedicated high-DPI context, so the crops are big enough to judge
@@ -886,6 +969,12 @@ try {
       expect(
         result.indicatorMargin === "6px 6px",
         `material-you indicator keeps a gap beside both handles in ${result.colorScheme} (${result.indicatorMargin})`,
+      );
+    }
+
+    if (skipped.length) {
+      console.log(
+        `\n${skipped.length} theme(s) captured once because light and dark resolve identically: ${skipped.join(", ")}`,
       );
     }
 
