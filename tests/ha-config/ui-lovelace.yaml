@@ -10,6 +10,11 @@ views:
         title: Range Entity Row
         entities:
           - type: custom:range-entity-row
+            entity: input_number.drag_low
+            range_entity: input_number.drag_high
+            name: Dragging
+            icon: mdi:gesture-swipe-horizontal
+          - type: custom:range-entity-row
             entity: input_number.lower_temp
             range_entity: input_number.upper_temp
             name: Temperature Range

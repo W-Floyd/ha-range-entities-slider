@@ -37,7 +37,9 @@ KEEP_HA=1 just render    # leave HA up on http://localhost:8124 (render / render
 
 Screenshots land in `tests/screenshots/` (gitignored, uploaded as CI artifacts) — one capture per
 colour scheme, of a single list holding the custom row, the stock `input_number` slider rows for the
-same entities, and the edge cases. So each capture doubles as a side-by-side comparison, and the
+same entities, and the edge cases. The top row is held mid-drag while each capture is taken, so the
+value popup and whatever the theme does to a handle being moved are both visible; the pointer
+returns to where it started before releasing, leaving the entities as they were. So each capture doubles as a side-by-side comparison, and the
 theme sweep frames its captures identically.
 
 A run is skipped when nothing that affects it has changed: the card, the tests, the settings, the

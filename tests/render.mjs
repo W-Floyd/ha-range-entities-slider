@@ -319,6 +319,33 @@ async function captureOverview(page, file) {
         return { x: r.x, y: r.y, right: r.right, bottom: r.bottom };
       }),
     );
+  // Hold a drag on the row set aside for it, so every capture shows the value
+  // popup and whatever the theme does to a handle while it is being moved. The
+  // pointer returns to where it started before releasing, so the entities are
+  // left as they were.
+  const dragIndex = await page
+    .locator("range-entity-row")
+    .evaluateAll((rows) => rows.findIndex((el) => el.config?.name === "Dragging"));
+  let dragFrom = null;
+  if (dragIndex >= 0) {
+    dragFrom = await page
+      .locator("range-entity-row")
+      .nth(dragIndex)
+      .evaluate((el) => {
+        const node = el.shadowRoot
+          ?.querySelector("ha-slider")
+          ?.shadowRoot?.querySelector("#thumb-max");
+        const r = node?.getBoundingClientRect();
+        return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+      });
+    if (dragFrom) {
+      await page.mouse.move(dragFrom.x, dragFrom.y);
+      await page.mouse.down();
+      await page.mouse.move(dragFrom.x + 18, dragFrom.y, { steps: 6 });
+      await page.waitForTimeout(400);
+    }
+  }
+
   const pad = 12;
   const clip = cards.length
     ? {
@@ -335,6 +362,12 @@ async function captureOverview(page, file) {
       }
     : undefined;
   await page.screenshot({ path: file, clip });
+
+  if (dragFrom) {
+    await page.mouse.move(dragFrom.x, dragFrom.y, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+  }
 }
 
 const failures = [];

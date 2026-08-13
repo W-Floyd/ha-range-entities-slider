@@ -57,7 +57,8 @@ promotes that section to the new version and refuses to run if it is empty.
   cannot leave the three disagreeing.
 - One screenshot per colour scheme of a single list holding the custom row, the
   stock rows and the edge cases, replacing four separate element captures. The
-  theme sweep frames its captures the same way.
+  theme sweep frames its captures the same way, and the top row is held mid-drag
+  so every capture shows the value popup and the theme's own drag treatment.
 - Separate status badges for Home Assistant stable, beta and the theme sweep.
   A badge reports one workflow, so each is a thin caller of the shared render
   workflow rather than a copy of it. Stable and beta run daily now that an
