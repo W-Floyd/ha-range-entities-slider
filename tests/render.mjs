@@ -252,7 +252,7 @@ const browser = await chromium.launch();
 try {
   for (const colorScheme of ["light", "dark"]) {
     const context = await browser.newContext({
-      viewport: { width: 900, height: 700 },
+      viewport: { width: 1400, height: 800 },
       colorScheme,
       deviceScaleFactor: 2,
     });
@@ -708,7 +708,7 @@ try {
 
     for (const colorScheme of ["light", "dark"]) {
       const context = await browser.newContext({
-        viewport: { width: 900, height: 700 },
+        viewport: { width: 1400, height: 800 },
         colorScheme,
         deviceScaleFactor: 2,
       });

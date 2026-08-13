@@ -417,9 +417,10 @@ class RangeEntityRow extends LitElement {
       ha-slider {
         width: 100%;
         max-width: 200px;
-        /* Same gutters the stock input_number row gives its slider, so the
-           track lines up with the rows above and below it. */
-        margin: 1px 8px;
+        /* The stock input_number row uses exactly this: the horizontal margin
+           leaves room for the thumb at min and max, so the card's overflow-x
+           does not clip it. */
+        margin: 1px var(--ha-space-2, 8px);
       }
       /* Override material-you styles for range sliders */
       ha-slider::part(indicator) {

@@ -40,9 +40,10 @@ promotes that section to the new version and refuses to run if it is empty.
   each entity's own `step`, the user's number format setting, and each entity's
   own unit. Previously a `step: 0.5` entity read `18 °C` where the stock row
   read `18.0 °C`.
-- The slider was missing the `1px 8px` gutters the stock row gives its own, so
-  the track ran into the value readout and sat out of line with the rows around
-  it.
+- The slider was missing the `1px var(--ha-space-2)` gutters the stock row gives
+  its own, so the track ran into the value readout and sat out of line with the
+  rows around it. Home Assistant uses that margin to keep the thumb at min and
+  max from being clipped by the card's `overflow-x`.
 - Under material-you the range indicator ended square against the handles. The
   base component rounds its thumb-facing end 2px, which in range mode applies to
   both ends.
