@@ -764,6 +764,7 @@ try {
     const results = [];
     const skipped = [];
     const appearances = new Map();
+    let cardModChecked = false;
 
     // One capture stands for both modes: drop the now-misleading suffix and
     // relabel the row.
@@ -825,6 +826,16 @@ try {
         } catch {
           results.push({ theme, colorScheme, error: "row never appeared" });
           continue;
+        }
+
+        // card-mod is a resource, not a theme: several packs put their styles
+        // behind card-mod-theme keys, which silently do nothing without it.
+        if (!cardModChecked) {
+          cardModChecked = true;
+          const registered = await page.evaluate(
+            () => !!customElements.get("card-mod") && !!customElements.get("mod-card"),
+          );
+          expect(registered, "card-mod is loaded for the themes that need it");
         }
 
         // Themes can declare modes whose values are identical; compare how the

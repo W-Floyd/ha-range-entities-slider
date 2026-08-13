@@ -24,7 +24,11 @@ cache="${THEME_CACHE:-$ROOT/tests/.theme-cache}"
 ttl="${THEME_CACHE_TTL:-604800}"
 
 # repo | extra file to drop into www/ (optional)
+#
+# card-mod carries no themes of its own: several of the packs below use
+# card-mod-theme keys and silently lose those styles without it.
 THEMES=(
+  "thomasloven/lovelace-card-mod|card-mod.js"
   "Nerwyn/material-you-theme|"
   "Nerwyn/material-you-utilities|dist/material-you-utilities.min.js"
   "catppuccin/home-assistant|"

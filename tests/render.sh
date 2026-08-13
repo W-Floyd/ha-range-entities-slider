@@ -46,14 +46,20 @@ cp -R "$ROOT/tests/ha-config/." "$workdir/"
 mkdir -p "$workdir/www" "$workdir/themes" "$OUT_DIR"
 cp "$ROOT/ha-range-entities-slider.js" "$workdir/www/"
 
-printf -- '- url: /local/ha-range-entities-slider.js\n  type: module\n' >"$workdir/resources.yaml"
+: >"$workdir/resources.yaml"
 
 if [[ "${SWEEP_THEMES:-0}" == "1" ]]; then
   "$ROOT/tests/install-themes.sh" "$workdir"
-  if [[ -f "$workdir/www/material-you-utilities.min.js" ]]; then
-    printf -- '- url: /local/material-you-utilities.min.js\n  type: module\n' >>"$workdir/resources.yaml"
-  fi
+  # card-mod goes first: themes that use card-mod-theme keys need it loaded
+  # before their styles can apply.
+  for module in card-mod.js material-you-utilities.min.js; do
+    if [[ -f "$workdir/www/$module" ]]; then
+      printf -- '- url: /local/%s\n  type: module\n' "$module" >>"$workdir/resources.yaml"
+    fi
+  done
 fi
+
+printf -- '- url: /local/ha-range-entities-slider.js\n  type: module\n' >>"$workdir/resources.yaml"
 
 echo "==> building ${RENDER_IMAGE}"
 docker build -q -t "$RENDER_IMAGE" "$ROOT/tests" >/dev/null

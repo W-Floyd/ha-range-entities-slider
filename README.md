@@ -166,6 +166,7 @@ the row under a curated selection of them:
 
 | Pack | Themes swept |
 | ---- | ------------ |
+| [card-mod](https://github.com/thomasloven/lovelace-card-mod) | none — a resource the packs below depend on |
 | [material-you-theme](https://github.com/Nerwyn/material-you-theme) + [material-you-utilities](https://github.com/Nerwyn/material-you-utilities) | Material You |
 | [catppuccin/home-assistant](https://github.com/catppuccin/home-assistant) | Catppuccin Latte, Catppuccin Mocha |
 | [homeassistant-visionos-theme](https://github.com/Nezz/homeassistant-visionos-theme) | visionos, Liquid Glass |
@@ -173,6 +174,11 @@ the row under a curated selection of them:
 | [graphite](https://github.com/TilmanGriesel/graphite) | Graphite, Graphite Light |
 | [lovelace-ios-themes](https://github.com/basnijholt/lovelace-ios-themes) | ios-light-mode-light-blue, ios-dark-mode-dark-blue |
 | [macOS-Theme](https://github.com/JuanMTech/macOS-Theme) | macOS Theme |
+
+card-mod is installed as a dashboard resource, loaded before the theme modules and the card itself:
+8 of the 12 installed theme files put styling behind `card-mod-theme` keys — 33 references in
+Metrology alone, plus visionOS, Liquid Glass and every Graphite variant — and those styles silently
+do nothing without it. The sweep asserts it registered.
 
 The packs expand to 56 themes, so the sweep renders a representative pair per pack rather than every
 accent colour, and skips the "Do Not Use" base themes the packs ship for inheritance. Each theme is
