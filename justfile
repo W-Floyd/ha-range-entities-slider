@@ -51,6 +51,17 @@ check:
       echo "ok: version ${version} is not yet tagged"
     fi
 
+# Render the card in a real Home Assistant and check it (version: stable | beta | 2026.7)
+render ha_version="stable":
+    tests/render.sh {{ ha_version }}
+
+# Render against both Home Assistant stable and beta
+render-all: (render "stable") (render "beta")
+
+# Render the card under the custom themes (ALL_THEMES=1 or THEME_FILTER=a,b to widen)
+render-themes ha_version="stable":
+    SWEEP_THEMES=1 tests/render.sh {{ ha_version }}
+
 # Format with prettier (downloads it on demand via npx)
 fmt:
     npx --yes prettier --write {{ js }} hacs.json README.md

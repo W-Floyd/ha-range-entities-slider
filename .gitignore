@@ -1,0 +1,4 @@
+# Render-test output; produced on demand and uploaded as CI artifacts.
+tests/screenshots/
+
+node_modules/

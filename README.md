@@ -113,12 +113,68 @@ Task running uses [just](https://github.com/casey/just); `just` on its own lists
 | Recipe                | What it does                                                          |
 | --------------------- | --------------------------------------------------------------------- |
 | `just check`          | Parses the card as an ES module, validates `hacs.json`, flags version/tag drift |
+| `just render [ver]`   | Renders the card in a real Home Assistant and checks it (`stable` by default)   |
+| `just render-all`     | Renders against both Home Assistant `stable` and `beta`                |
+| `just render-themes`  | Renders the row under the custom theme packs                           |
 | `just fmt`            | Formats with prettier (`fmt-check` to verify only)                     |
 | `just changelog`      | Shows the pending `[Unreleased]` entries                               |
 | `just bump <level>`   | Promotes `[Unreleased]`, rewrites `VERSION`, commits, and tags         |
 | `just release`        | Pushes the commit and tag, then creates the GitHub release             |
 | `just publish <level>`| `bump` followed by `release`                                           |
 | `just notes [version]`| Prints the notes recorded for a version                                |
+
+### Render test
+
+`just render` boots Home Assistant in Docker against a seeded config, completes onboarding through
+the API, and drives Playwright to load the dashboard and check the row. Docker is the only host
+requirement — the browser and Playwright itself live in the image built from
+[tests/Dockerfile](tests/Dockerfile).
+
+It checks that the row mounts, the slider is in range mode, `min`/`max`/`step` and both handles
+follow the entities, and that the Material You patch actually lands inside `ha-slider`'s shadow
+root. That last one matters most: the patch targets private ids (`#thumb-min`, `#thumb-max`,
+`#indicator`) that upstream can rename at any time, which is why
+[the workflow](.github/workflows/render.yml) runs it weekly against `stable` and `beta`.
+
+Screenshots land in `tests/screenshots/` (gitignored, uploaded as CI artifacts) in light and dark,
+and the test dashboard places the custom row directly above stock `input_number` slider rows for the
+same entities, so each capture doubles as a side-by-side comparison.
+
+```bash
+just render              # Home Assistant stable
+just render beta
+KEEP_HA=1 just render    # leave HA up on http://localhost:8124 (render / render-password)
+```
+
+#### Custom themes
+
+`just render-themes` additionally downloads these theme packs into the test config and screenshots
+the row under a curated selection of them:
+
+| Pack | Themes swept |
+| ---- | ------------ |
+| [material-you-theme](https://github.com/Nerwyn/material-you-theme) + [material-you-utilities](https://github.com/Nerwyn/material-you-utilities) | Material You |
+| [catppuccin/home-assistant](https://github.com/catppuccin/home-assistant) | Catppuccin Latte, Catppuccin Mocha |
+| [homeassistant-visionos-theme](https://github.com/Nezz/homeassistant-visionos-theme) | visionos, Liquid Glass |
+| [Metrology-for-Hass](https://github.com/Madelena/Metrology-for-Hass) | Metro Blue, Fluent Slate |
+| [graphite](https://github.com/TilmanGriesel/graphite) | Graphite, Graphite Light |
+| [lovelace-ios-themes](https://github.com/basnijholt/lovelace-ios-themes) | ios-light-mode-light-blue, ios-dark-mode-dark-blue |
+| [macOS-Theme](https://github.com/JuanMTech/macOS-Theme) | macOS Theme |
+
+The packs expand to 56 themes, so the sweep renders a representative pair per pack rather than every
+accent colour, and skips the "Do Not Use" base themes the packs ship for inheritance.
+
+```bash
+just render-themes
+ALL_THEMES=1 just render-themes                       # every installed theme
+THEME_FILTER="Graphite,Catppuccin" just render-themes  # substring match
+```
+
+It reports whether the range handle gets a painted body under each theme. Only Material You defines
+`--md-sys-color-primary`, which the patch uses to draw the handle bar — under the other packs the
+handle reads as a gap in the track instead. The sweep measures with the patch detached too, which
+confirms Home Assistant does not paint it either, so this is a gap rather than a regression; it is a
+warning, and `STRICT_THEMES=1` turns it into a failure.
 
 **Every change documents itself.** Add entries under `## [Unreleased]` in
 [CHANGELOG.md](CHANGELOG.md) as part of the change, in the same commit. `just bump` promotes that

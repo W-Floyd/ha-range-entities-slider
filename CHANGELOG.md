@@ -10,6 +10,21 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ## [Unreleased]
 
+### Added
+
+- Automated render test (`just render`): boots Home Assistant in Docker, onboards
+  through the API, and drives Playwright to check that the row mounts, the slider
+  tracks both entities, and the Material You patch still applies inside
+  `ha-slider`'s shadow root. Captures light and dark screenshots alongside stock
+  `input_number` slider rows for comparison.
+- `Render` workflow running that test against Home Assistant `stable` and `beta`
+  on push and weekly, so upstream frontend changes that break the shadow-DOM
+  patch surface before users hit them.
+- Theme sweep (`just render-themes`): installs the Material You, Catppuccin,
+  visionOS, Metrology, Graphite, iOS, and macOS theme packs and screenshots the
+  row under a curated selection, reporting whether the range handle gets a
+  painted body under each. Runs weekly in CI.
+
 ## [0.1.0] - 2026-08-13
 
 ### Added

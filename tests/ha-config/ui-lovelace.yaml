@@ -1,0 +1,18 @@
+title: Render Test
+views:
+  - title: Card
+    cards:
+      # The custom row sits directly above the stock input_number slider rows it
+      # is modeled on, so the screenshots double as a side-by-side comparison.
+      - type: entities
+        title: Range Entity Row
+        entities:
+          - type: custom:range-entity-row
+            entity: input_number.lower_temp
+            range_entity: input_number.upper_temp
+            name: Temperature Range
+            icon: mdi:thermometer
+          - entity: input_number.lower_temp
+            name: Lower Temp (stock row)
+          - entity: input_number.upper_temp
+            name: Upper Temp (stock row)

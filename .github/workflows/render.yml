@@ -1,0 +1,56 @@
+name: Render
+
+# Renders the card in a real Home Assistant and checks it. The weekly run is the
+# point of the matrix: the card patches ha-slider's private shadow DOM by id, so
+# an upstream frontend change can break it without this repo changing at all.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ha_version: [stable, beta]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render against Home Assistant ${{ matrix.ha_version }}
+        run: tests/render.sh ${{ matrix.ha_version }}
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.ha_version }}
+          path: tests/screenshots/
+          if-no-files-found: warn
+
+  # Downloads the custom theme packs and screenshots the row under a curated set
+  # of them. Kept off the push/PR path because it pulls eight repositories and
+  # renders 24 combinations.
+  themes:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render under custom themes
+        env:
+          SWEEP_THEMES: "1"
+        run: tests/render.sh stable
+
+      - name: Upload theme screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-themes
+          path: tests/screenshots/
+          if-no-files-found: warn
