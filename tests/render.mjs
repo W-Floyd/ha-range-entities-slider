@@ -211,6 +211,11 @@ const HANDLE_PROBE = (el) => {
     };
   };
 
+  const indicator = sliderShadow.querySelector("#indicator");
+  const indicatorRadius = indicator
+    ? getComputedStyle(indicator).borderRadius
+    : null;
+
   const withFix = measure();
 
   // Measure again with the patch detached, to attribute an invisible handle to
@@ -223,7 +228,7 @@ const HANDLE_PROBE = (el) => {
     sliderShadow.appendChild(patch);
   }
 
-  return { thumb: true, fix: !!patch, ...withFix, withoutFix };
+  return { thumb: true, fix: !!patch, indicatorRadius, ...withFix, withoutFix };
 };
 
 const failures = [];
@@ -282,10 +287,11 @@ try {
 
     // Playwright's css engine pierces open shadow roots, so the row is
     // reachable without walking the frontend's element tree by hand.
-    const row = page.locator("range-entity-row");
+    const row = page.locator("range-entity-row").first();
     await row.waitFor({ state: "attached", timeout: 60_000 });
     await page
       .locator("range-entity-row ha-slider")
+      .first()
       .waitFor({ state: "attached", timeout: 30_000 });
 
     // Let the slider's shadow DOM settle, including the card's 50ms patch.
@@ -308,6 +314,9 @@ try {
         sliderShadowIds: sliderShadow
           ? [...sliderShadow.querySelectorAll("[id]")].map((n) => n.id)
           : [],
+        indicatorRadius: sliderShadow?.querySelector("#indicator")
+          ? getComputedStyle(sliderShadow.querySelector("#indicator")).borderRadius
+          : null,
         thumbMin: !!sliderShadow?.querySelector("#thumb-min"),
         thumbMax: !!sliderShadow?.querySelector("#thumb-max"),
         fixApplied: !!sliderShadow?.querySelector("#range-slider-fix"),
@@ -408,6 +417,231 @@ try {
         "readout shows both values",
       );
 
+      // The readout should format exactly like the stock rows: decimals from
+      // each entity's step, and the user's locale number format.
+      const stockValues = await page
+        .locator("hui-input-number-entity-row")
+        .evaluateAll((rows) =>
+          rows.map(
+            (r) =>
+              r.shadowRoot
+                ?.querySelector(".state")
+                ?.textContent?.replace(/\s+/g, " ")
+                .trim() ?? "",
+          ),
+        );
+      const ourValues = await row.evaluate((el) =>
+        [...(el.shadowRoot?.querySelectorAll(".state") ?? [])]
+          .map((n) => n.innerHTML)
+          .join("")
+          .split(/<br\s*\/?>/)
+          .map((part) =>
+            part
+              .replace(/<[^>]*>/g, "")
+              .replace(/&nbsp;|\u00a0/g, " ")
+              .replace(/\s+/g, " ")
+              .trim(),
+          ),
+      );
+      console.log(
+        `readout: ${JSON.stringify(ourValues)} vs stock ${JSON.stringify(stockValues)}`,
+      );
+      expect(
+        ourValues.length === 2 &&
+          stockValues.length === 2 &&
+          ourValues[0] === stockValues[0] &&
+          ourValues[1] === stockValues[1],
+        `readout formats like the stock rows (${ourValues.join(" / ")} vs ${stockValues.join(" / ")})`,
+      );
+
+      // Boundary and degenerate pairs from the second card.
+      const edges = await page.locator("range-entity-row").evaluateAll((rows) =>
+        rows.map((el) => {
+          const shadow = el.shadowRoot;
+          const slider = shadow?.querySelector("ha-slider");
+          const icon = shadow?.querySelector("ha-icon.inverted-warning");
+          return {
+            name: el.config?.name ?? null,
+            entity: el.config?.entity ?? null,
+            rangeEntity: el.config?.range_entity ?? null,
+            warningIcon: icon?.getAttribute("icon") ?? null,
+            warningColor: icon ? getComputedStyle(icon).color : null,
+            warningTitle: icon?.getAttribute("title") ?? null,
+            stateColor: shadow?.querySelector(".state")
+              ? getComputedStyle(shadow.querySelector(".state")).color
+              : null,
+            errorColor: getComputedStyle(el)
+              .getPropertyValue("--error-color")
+              .trim(),
+            min: slider?.min,
+            max: slider?.max,
+            minValue: slider?.minValue,
+            maxValue: slider?.maxValue,
+            state: (shadow?.querySelector(".state")?.innerHTML ?? "")
+              .split(/<br\s*\/?>/)
+              .map((part) =>
+                part
+                  .replace(/<[^>]*>/g, "")
+                  .replace(/&nbsp;|\u00a0/g, " ")
+                  .replace(/\s+/g, " ")
+                  .trim(),
+              ),
+          };
+        }),
+      );
+      const byEntity = Object.fromEntries(
+        edges.map((e) => [e.entity?.replace("input_number.", ""), e]),
+      );
+      const byName = Object.fromEntries(edges.map((e) => [e.name, e]));
+      console.log(`\n--- rows ---\n${JSON.stringify(byEntity, null, 1)}\n---\n`);
+
+      const span = byEntity.span_low;
+      expect(
+        span?.minValue === span?.min && span?.maxValue === span?.max,
+        `handles pinned to both ends stay there (${span?.minValue}/${span?.maxValue} of ${span?.min}-${span?.max})`,
+      );
+
+      // The entity behind the lower handle holds 24 and the upper holds 18.
+      // The slider has to take them in order, but the readout shows them as the
+      // entities hold them, flagged in the error colour.
+      const inverted = byName["Inverted (upper < lower)"];
+      expect(
+        inverted?.minValue === 18 && inverted?.maxValue === 24,
+        `inverted pair drives the slider in order (${inverted?.minValue}/${inverted?.maxValue})`,
+      );
+      expect(
+        inverted?.state?.[0] === "24.0 °C" && inverted?.state?.[1] === "18.0 °C",
+        `inverted readout shows the entities' own values (${inverted?.state?.join(" / ")})`,
+      );
+      expect(
+        inverted?.warningIcon === "mdi:alert-circle",
+        `inverted row shows an exclamation icon (${inverted?.warningIcon})`,
+      );
+      expect(
+        !!inverted?.warningTitle?.includes("is above"),
+        "inverted warning explains itself on hover",
+      );
+      expect(
+        !!inverted?.warningColor &&
+          inverted.warningColor === inverted.stateColor &&
+          inverted.warningColor !== "rgb(0, 0, 0)",
+        `inverted row is coloured with the error colour (${inverted?.warningColor}, theme --error-color ${inverted?.errorColor})`,
+      );
+
+      // warn_inverted: false opts out: no icon, values presented in order.
+      const quiet = byName["Inverted (warning disabled)"];
+      expect(
+        quiet?.warningIcon === null,
+        `warn_inverted: false hides the icon (${quiet?.warningIcon})`,
+      );
+      expect(
+        quiet?.state?.[0] === "18.0 °C" && quiet?.state?.[1] === "24.0 °C",
+        `warn_inverted: false presents the pair in order (${quiet?.state?.join(" / ")})`,
+      );
+
+      const equal = byEntity.equal_low;
+      expect(
+        equal?.minValue === 20 && equal?.maxValue === 20,
+        `equal values render both handles at the same point (${equal?.minValue}/${equal?.maxValue})`,
+      );
+
+      // step: 1, so this one should carry no decimals at all.
+      const whole = byEntity.whole_low;
+      expect(
+        whole?.state?.[0] === "20 %" && whole?.state?.[1] === "80 %",
+        `whole-number step drops the decimals (${whole?.state?.join(" / ")})`,
+      );
+
+      // The stock row gives its slider 1px 8px gutters; without them our track
+      // runs into the value readout and misaligns with the rows around it.
+      const [ourMargin, stockMargin] = await Promise.all([
+        row.evaluate(
+          (el) => getComputedStyle(el.shadowRoot.querySelector("ha-slider")).margin,
+        ),
+        stockRow.evaluate(
+          (el) => getComputedStyle(el.shadowRoot.querySelector("ha-slider")).margin,
+        ),
+      ]);
+      expect(
+        ourMargin === stockMargin,
+        `slider has the same gutters as the stock row (${ourMargin} vs ${stockMargin})`,
+      );
+
+      // Drag the lower handle far past the upper one: ha-slider should clamp
+      // rather than let them cross, so the card can never write an inverted pair.
+      const thumbBox = await row.evaluate((el) => {
+        const thumb = el.shadowRoot
+          ?.querySelector("ha-slider")
+          ?.shadowRoot?.querySelector("#thumb-min");
+        const r = thumb?.getBoundingClientRect();
+        return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+      });
+      const trackBox = await row.evaluate((el) => {
+        const track = el.shadowRoot
+          ?.querySelector("ha-slider")
+          ?.shadowRoot?.querySelector("#track");
+        const r = track?.getBoundingClientRect();
+        return r ? { right: r.right } : null;
+      });
+      if (thumbBox && trackBox) {
+        await page.mouse.move(thumbBox.x, thumbBox.y);
+        await page.mouse.down();
+        await page.mouse.move(trackBox.right + 40, thumbBox.y, { steps: 12 });
+        await page.mouse.up();
+        await page.waitForTimeout(750);
+
+        const dragged = await row.evaluate((el) => {
+          const slider = el.shadowRoot?.querySelector("ha-slider");
+          return { minValue: slider?.minValue, maxValue: slider?.maxValue };
+        });
+        console.log(`after dragging lower past upper: ${JSON.stringify(dragged)}`);
+        expect(
+          dragged.minValue <= dragged.maxValue,
+          `handles cannot cross when dragged (${dragged.minValue} <= ${dragged.maxValue})`,
+        );
+        // The upper handle started at 24 and must not have been pushed along.
+        expect(
+          dragged.maxValue === 24,
+          `dragging the lower handle does not push the upper one (upper=${dragged.maxValue}, expected 24)`,
+        );
+        expect(
+          dragged.minValue === 24,
+          `dragged handle stops at the other one (lower=${dragged.minValue}, expected 24)`,
+        );
+
+        const states = await (
+          await fetch(`${HA_URL}/api/states/input_number.lower_temp`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        ).json();
+        const upperState = await (
+          await fetch(`${HA_URL}/api/states/input_number.upper_temp`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        ).json();
+        console.log(
+          `entities after drag: lower=${states.state} upper=${upperState.state}`,
+        );
+        expect(
+          parseFloat(states.state) <= parseFloat(upperState.state),
+          `drag writes the pair in order (lower=${states.state} upper=${upperState.state})`,
+        );
+
+        // Put them back so the screenshots below are the documented values.
+        await fetch(`${HA_URL}/api/services/input_number/set_value`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            entity_id: "input_number.lower_temp",
+            value: 18,
+          }),
+        });
+        await page.waitForTimeout(500);
+      }
+
       const thumbs = probe.thumbMin && probe.thumbMax;
       const summary = `Material You patch: #thumb-min/#thumb-max present=${thumbs}, style injected=${probe.fixApplied}`;
       if (thumbs && probe.fixApplied) {
@@ -424,7 +658,8 @@ try {
     for (const [name, locator] of [
       ["row", row],
       ["stock-row", stockRow],
-      ["card", page.locator("hui-entities-card")],
+      ["card", page.locator("hui-entities-card").first()],
+      ["edge-cases", page.locator("hui-entities-card").nth(1)],
     ]) {
       const file = `${OUT_DIR}/${name}-${HA_VERSION}-${colorScheme}.png`;
       await locator.screenshot({ path: file });
@@ -502,7 +737,7 @@ try {
           waitUntil: "domcontentloaded",
         });
 
-        const row = page.locator("range-entity-row");
+        const row = page.locator("range-entity-row").first();
         try {
           await row.waitFor({ state: "attached", timeout: 30_000 });
           await page.waitForTimeout(750);
@@ -517,6 +752,7 @@ try {
         const slug = theme.toLowerCase().replace(/[^a-z0-9]+/g, "-");
         await page
           .locator("hui-entities-card")
+          .first()
           .screenshot({ path: `${themeDir}/${slug}-${colorScheme}.png` });
 
         // Optional side-by-side: what the row looks like with the card's whole
@@ -527,7 +763,7 @@ try {
             shadow?.querySelector("#range-slider-fix")?.remove();
           });
           await page.waitForTimeout(250);
-          await page.locator("hui-entities-card").screenshot({
+          await page.locator("hui-entities-card").first().screenshot({
             path: `${themeDir}/${slug}-${colorScheme}-nopatch.png`,
           });
         }
@@ -549,6 +785,15 @@ try {
               : ")");
       console.log(
         `${result.theme.padEnd(width)}  ${result.colorScheme.padEnd(5)}  ${status}`,
+      );
+    }
+
+    // Both ends of the range indicator face a handle, so neither should be
+    // square against it. The base component leaves the far end at 8px.
+    for (const result of results.filter((r) => /material you/i.test(r.theme))) {
+      expect(
+        result.indicatorRadius === "2px",
+        `material-you indicator is rounded against both handles in ${result.colorScheme} (${result.indicatorRadius})`,
       );
     }
 

@@ -58,6 +58,24 @@ class RangeEntityRow extends LitElement {
         this._lowerVal = Math.min(range.lowerVal, range.upperVal);
         this._upperVal = Math.max(range.lowerVal, range.upperVal);
       }
+
+      // The handles cannot be dragged past each other, so an inverted pair
+      // means something outside the card wrote it. The row still presents the
+      // values low-to-high, and a drag writes them back in order, but say so
+      // rather than hiding it — the entities may not mean what they look like.
+      if (range.lowerVal > range.upperVal) {
+        const pair = `${range.lowerVal}/${range.upperVal}`;
+        if (this._warnedInverted !== pair) {
+          this._warnedInverted = pair;
+          console.warn(
+            `[range-entity-row] ${this.config.entity} (${range.lowerVal}) is above ` +
+              `${this.config.range_entity} (${range.upperVal}); showing them ` +
+              `low-to-high. A drag will write them back in order.`,
+          );
+        }
+      } else {
+        this._warnedInverted = undefined;
+      }
     }
 
     // Fix material-you theme compatibility for range sliders
@@ -108,6 +126,55 @@ class RangeEntityRow extends LitElement {
     return cfg;
   }
 
+  // ── Value formatting ────────────────────────────────────────────────────────
+
+  /**
+   * The locales Home Assistant formats numbers with, derived from the user's
+   * number format preference. Mirrors the frontend's own mapping so the readout
+   * reads like the stock rows; null is HA's "none", meaning no localisation.
+   */
+  _numberFormatLocale() {
+    const locale = this.hass?.locale;
+    switch (locale?.number_format) {
+      case "comma_decimal":
+        return ["en-US", "en"];
+      case "decimal_comma":
+        return ["de", "es", "it"];
+      case "space_comma":
+        return ["fr", "sv", "cs"];
+      case "system":
+        return undefined;
+      case "none":
+        return null;
+      default:
+        return locale?.language;
+    }
+  }
+
+  /**
+   * Formats one entity's value the way its stock row would: decimal places from
+   * that entity's own step, the user's locale number format, then its own unit.
+   */
+  _formatValue(entityId, value) {
+    const attributes = this.hass?.states[entityId]?.attributes ?? {};
+    const step = parseFloat(attributes.step);
+    const decimals = Number.isFinite(step)
+      ? (String(step).split(".")[1] ?? "").length
+      : 0;
+
+    const locale = this._numberFormatLocale();
+    const number =
+      locale === null
+        ? value.toFixed(decimals)
+        : new Intl.NumberFormat(locale, {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          }).format(value);
+
+    const unit = attributes.unit_of_measurement;
+    return `${number}${unit ? ` ${unit}` : ""}`;
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   render() {
@@ -115,8 +182,29 @@ class RangeEntityRow extends LitElement {
     const range = this._computeRange();
     if (!range) return html``;
 
-    const { min, max, step, unit } = range;
-    const fmt = (v) => `${v}${unit ? `\u00a0${unit}` : ""}`;
+    const { min, max, step } = range;
+
+    // An inverted pair can only come from outside the card, since the handles
+    // cannot be dragged past each other. The slider itself has to be given the
+    // values in order, but the readout shows them as the entities actually hold
+    // them, flagged, rather than quietly presenting them the other way round.
+    const inverted =
+      !this._interacting &&
+      range.lowerVal > range.upperVal &&
+      this.config.warn_inverted !== false;
+    const lower = this._formatValue(
+      this.config.entity,
+      inverted ? range.lowerVal : this._lowerVal,
+    );
+    const upper = this._formatValue(
+      this.config.range_entity,
+      inverted ? range.upperVal : this._upperVal,
+    );
+    const invertedTitle = inverted
+      ? `${this.config.entity} (${lower}) is above ` +
+        `${this.config.range_entity} (${upper}). The slider shows them in ` +
+        `order; dragging it writes them back in order.`
+      : undefined;
 
     return html`
       <hui-generic-entity-row
@@ -135,8 +223,15 @@ class RangeEntityRow extends LitElement {
             @input=${this._onInput}
             @change=${this._onChange}
           ></ha-slider>
-          <span class="state"
-            >${fmt(this._lowerVal)}<br />${fmt(this._upperVal)}</span
+          ${inverted
+            ? html`<ha-icon
+                class="inverted-warning"
+                icon="mdi:alert-circle"
+                title=${invertedTitle}
+              ></ha-icon>`
+            : ""}
+          <span class="state ${inverted ? "inverted-warning" : ""}"
+            >${lower}<br />${upper}</span
           >
         </div>
       </hui-generic-entity-row>
@@ -159,6 +254,10 @@ class RangeEntityRow extends LitElement {
         :host([range]) #thumb-max {
           overflow: visible;
           background: var(--ha-slider-thumb-negative-color);
+          /* The stock thumb is a square-cornered rectangle in this colour: it
+             punches the gap through the track either side of the handle.
+             Rounding it here curves the gap inwards, which reads as the
+             neighbouring segments being cut concave. */
           border-radius: 0;
           transition:
             width var(--md-sys-motion-expressive-spatial-default),
@@ -182,6 +281,11 @@ class RangeEntityRow extends LitElement {
         :host([range]) #indicator {
           margin-inline-end: 0 !important;
           box-shadow: none !important;
+          /* The base component rounds the indicator 8px on its outer end and
+             2px on the end that faces the thumb. In range mode both ends face a
+             thumb, so both take the 2px, instead of a square edge against the
+             handle. */
+          border-radius: 2px !important;
         }
       `;
     }
@@ -238,9 +342,30 @@ class RangeEntityRow extends LitElement {
   // ── Slider events ───────────────────────────────────────────────────────────
 
   _onInput(ev) {
+    const slider = ev.target;
+    const previousLower = this._lowerVal;
+    const previousUpper = this._upperVal;
+    let lower = slider.minValue;
+    let upper = slider.maxValue;
+
+    // ha-slider pushes the stationary handle along when the dragged one reaches
+    // it. Stop the dragged handle at the other instead: if both moved, the one
+    // that did not lead the move gets pinned back where it was.
+    if (this._interacting && lower !== previousLower && upper !== previousUpper) {
+      if (lower > previousLower) {
+        lower = previousUpper;
+        upper = previousUpper;
+      } else {
+        upper = previousLower;
+        lower = previousLower;
+      }
+      slider.minValue = lower;
+      slider.maxValue = upper;
+    }
+
     this._interacting = true;
-    this._lowerVal = ev.target.minValue;
-    this._upperVal = ev.target.maxValue;
+    this._lowerVal = lower;
+    this._upperVal = upper;
   }
 
   _onChange(ev) {
@@ -281,9 +406,20 @@ class RangeEntityRow extends LitElement {
         min-width: 45px;
         text-align: end;
       }
+      .inverted-warning {
+        color: var(--error-color, #db4437);
+      }
+      ha-icon.inverted-warning {
+        --mdc-icon-size: 20px;
+        margin-inline-end: 4px;
+        flex: none;
+      }
       ha-slider {
         width: 100%;
         max-width: 200px;
+        /* Same gutters the stock input_number row gives its slider, so the
+           track lines up with the rows above and below it. */
+        margin: 1px 8px;
       }
       /* Override material-you styles for range sliders */
       ha-slider::part(indicator) {

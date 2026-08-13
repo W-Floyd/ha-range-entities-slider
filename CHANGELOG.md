@@ -25,7 +25,27 @@ promotes that section to the new version and refuses to run if it is empty.
   row under a curated selection, failing if the range handle is left unpainted
   under any of them. Runs weekly in CI.
 
+### Changed
+
+- The handles no longer push each other: dragging one up to the other stops it
+  there, instead of shoving the other along to the end of the track.
+- An inverted pair (`range_entity` below `entity`) is now flagged rather than
+  quietly presented in order. The readout shows the values as the entities hold
+  them, with an exclamation icon in the error colour explaining it on hover, and
+  the new `warn_inverted: false` option opts out.
+
 ### Fixed
+
+- Values are formatted like the stock `input_number` row: decimal places from
+  each entity's own `step`, the user's number format setting, and each entity's
+  own unit. Previously a `step: 0.5` entity read `18 °C` where the stock row
+  read `18.0 °C`.
+- The slider was missing the `1px 8px` gutters the stock row gives its own, so
+  the track ran into the value readout and sat out of line with the rows around
+  it.
+- Under material-you the range indicator ended square against the handles. The
+  base component rounds its thumb-facing end 2px, which in range mode applies to
+  both ends.
 
 - Range handles were invisible under every theme except material-you, showing
   only as a gap in the track. The handle styling was material-you's — bars drawn

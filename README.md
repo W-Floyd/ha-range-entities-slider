@@ -16,10 +16,12 @@ your theme, name/icon overrides, and tap actions.
 - `min`, `max`, and `step` are derived automatically from the two entities' attributes
   (widest `min`/`max`, smallest `step`)
 - Unit of measurement picked up from either entity
-- Live value readout while dragging; the service call fires only on release
-- Values are normalised so the lower handle is always the smaller of the two
-- Styling patch for the Material You theme, which does not style range-slider thumbs correctly
-  out of the box
+- Live value readout while dragging; the service call fires only on release, formatted exactly as
+  the stock `input_number` row would
+- Handles stop at each other instead of pushing, and an inverted pair written from elsewhere is
+  flagged rather than silently reordered
+- Theme-aware handles: Home Assistant paints none on a range slider, so the row supplies them —
+  bars under material-you, and the stock round knob everywhere else
 
 ## Installation
 
@@ -85,12 +87,23 @@ input_number:
 | `entity`            | string | yes      | `input_number` entity backing the **lower** handle                  |
 | `range_entity`      | string | yes      | `input_number` entity backing the **upper** handle                  |
 | `name`              | string | no       | Overrides the row label                                            |
+| `warn_inverted`     | bool   | no       | Flag it when `range_entity` is below `entity` (default `true`)       |
 | `icon`              | string | no       | Overrides the row icon                                             |
 | `tap_action`        | object | no       | Standard Home Assistant action config, passed to the generic row    |
 | `hold_action`       | object | no       | Standard Home Assistant action config, passed to the generic row    |
 | `double_tap_action` | object | no       | Standard Home Assistant action config, passed to the generic row    |
 
 The name and icon default to those of the `entity` (lower handle) when not set.
+
+Values are formatted like the stock `input_number` row: decimal places come from each entity's own
+`step`, then the user's number format setting, then that entity's unit.
+
+The handles cannot be dragged past each other — the dragged one stops at the other rather than
+pushing it — and a drag always writes the smaller value to `entity` and the larger to `range_entity`.
+An inverted pair can therefore only be written from outside the card; when one is, the row shows the
+values as the entities hold them, marked with an exclamation icon in the error colour and explained
+on hover, rather than quietly presenting them the other way round. Set `warn_inverted: false` to
+suppress that and have the row present the pair in order instead.
 
 ## Notes and limitations
 
@@ -166,9 +179,14 @@ accent colour, and skips the "Do Not Use" base themes the packs ship for inherit
 
 ```bash
 just render-themes
-ALL_THEMES=1 just render-themes                       # every installed theme
-THEME_FILTER="Graphite,Catppuccin" just render-themes  # substring match
+ALL_THEMES=1 just render-themes                        # every installed theme
+THEME_FILTER="Graphite,Catppuccin" just render-themes   # substring match
+REFRESH_THEMES=1 just render-themes                     # ignore the download cache
 ```
+
+Theme tarballs are cached in `tests/.theme-cache` (gitignored, refreshed weekly) so repeated runs do
+not re-download them — unauthenticated GitHub allows only 60 API requests an hour. Set `GITHUB_TOKEN`
+to raise that; CI passes one automatically.
 
 It checks that the range handle gets a painted body under every theme swept, and fails if one does
 not (`STRICT_THEMES=0` downgrades that to a warning). This is what caught the handles rendering as a

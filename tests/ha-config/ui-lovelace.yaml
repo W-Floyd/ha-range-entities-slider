@@ -16,3 +16,30 @@ views:
             name: Lower Temp (stock row)
           - entity: input_number.upper_temp
             name: Upper Temp (stock row)
+
+      # Boundary and degenerate pairs. Each is asserted by tests/render.mjs and
+      # captured in the screenshots.
+      - type: entities
+        title: Edge cases
+        entities:
+          - type: custom:range-entity-row
+            entity: input_number.span_low
+            range_entity: input_number.span_high
+            name: Full span (min/max)
+          - type: custom:range-entity-row
+            entity: input_number.inverted_low
+            range_entity: input_number.inverted_high
+            name: Inverted (upper < lower)
+          - type: custom:range-entity-row
+            entity: input_number.inverted_low
+            range_entity: input_number.inverted_high
+            name: Inverted (warning disabled)
+            warn_inverted: false
+          - type: custom:range-entity-row
+            entity: input_number.equal_low
+            range_entity: input_number.equal_high
+            name: Equal values
+          - type: custom:range-entity-row
+            entity: input_number.whole_low
+            range_entity: input_number.whole_high
+            name: Whole-number step

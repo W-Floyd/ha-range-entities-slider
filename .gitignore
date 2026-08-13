@@ -2,3 +2,6 @@
 tests/screenshots/
 
 node_modules/
+
+# Cached theme tarballs for the render sweep.
+tests/.theme-cache/

@@ -42,9 +42,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache theme downloads
+        uses: actions/cache@v4
+        with:
+          path: tests/.theme-cache
+          key: themes-${{ hashFiles('tests/install-themes.sh') }}
+
       - name: Render under custom themes
         env:
           SWEEP_THEMES: "1"
+          # Raises the GitHub API rate limit for the theme tarball downloads.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: tests/render.sh stable
 
       - name: Upload theme screenshots
