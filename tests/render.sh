@@ -135,6 +135,17 @@ if [[ "${FORCE_RENDER:-0}" != "1" && -f "$stamp" ]] &&
 fi
 
 workdir="$(mktemp -d)"
+
+# Home Assistant writes its .storage as root inside the container. Docker
+# Desktop remaps that to the calling user, but on Linux it stays root-owned and
+# the host cannot delete it, so the removal is done from a container that can.
+remove_workdir() {
+  rm -rf "$workdir" 2>/dev/null && return 0
+  docker run --rm -v "$workdir:/workdir" "$HA_IMAGE" \
+    find /workdir -mindepth 1 -delete >/dev/null 2>&1 || true
+  rm -rf "$workdir" 2>/dev/null || true
+}
+
 cleanup() {
   [[ "${own_pins:-0}" == "1" ]] && rm -f "$theme_pins"
   if [[ "${KEEP_HA:-0}" == "1" ]]; then
@@ -142,8 +153,10 @@ cleanup() {
   else
     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
     docker network rm "$NETWORK" >/dev/null 2>&1 || true
-    rm -rf "$workdir"
+    remove_workdir
   fi
+  # Never let tidying up decide the result of the run.
+  return 0
 }
 trap cleanup EXIT
 
