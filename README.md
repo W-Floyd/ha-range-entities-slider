@@ -135,6 +135,7 @@ Task running uses [just](https://github.com/casey/just); `just` on its own lists
 | `just release`        | Pushes the commit and tag, then creates the GitHub release             |
 | `just publish <level>`| `bump` followed by `release`                                           |
 | `just notes [version]`| Prints the notes recorded for a version                                |
+| `just gallery [tag]`  | Previews the screenshot gallery CI appends to the release notes         |
 
 ### Render test
 
@@ -219,6 +220,17 @@ just check
 just bump minor    # patch | minor | major
 just release
 ```
+
+Pushing a `v*` tag also runs [the release workflow](.github/workflows/release.yml), which renders the
+card and the theme sweep against a real Home Assistant, attaches the screenshots to the release, and
+rewrites its notes as the changelog entry for that version followed by a gallery of those captures
+(`just gallery` previews it). They go on as **release assets** rather than workflow artifacts
+deliberately: artifacts expire — 90 days by default — whereas release assets last as long as the
+release and have deterministic URLs, so the notes can embed them. About 1.2 MB per release for the
+26 captures.
+
+`just release` and the workflow both tolerate the other having gone first, so it does not matter
+which creates the release.
 
 ## Changelog
 

@@ -139,9 +139,18 @@ release:
     # Release notes come from the CHANGELOG section for this version, not from
     # raw commit subjects. The card is attached as a release asset: HACS prefers
     # a matching asset over the repo root when one is present.
-    gh release create "${tag}" --title "${tag}" \
-      --notes "$({{ changelog }} notes "${version}")" {{ js }}
+    #
+    # The Release workflow fires on the same tag, so whichever gets there first
+    # creates the release and the other tops it up.
+    if gh release view "${tag}" >/dev/null 2>&1; then
+      echo "release ${tag} already exists; uploading the card to it"
+      gh release upload "${tag}" {{ js }} --clobber
+    else
+      gh release create "${tag}" --title "${tag}" \
+        --notes "$({{ changelog }} notes "${version}")" {{ js }}
+    fi
     echo "released ${tag}"
+    echo "CI will attach the screenshots and add the gallery to the notes"
 
 # Bump and release in one step (level: patch | minor | major)
 publish level="patch": (bump level) release
@@ -155,6 +164,14 @@ changelog:
     else
       echo "CHANGELOG.md has no entries under [Unreleased]"
     fi
+
+# Preview the screenshot gallery that CI appends to a release's notes
+gallery tag="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tag="{{ tag }}"
+    [[ -n "$tag" ]] || tag="v$(just version)"
+    node scripts/gallery.mjs "$tag"
 
 # Show the release notes recorded for a version (defaults to the current one)
 notes version="":

@@ -1,0 +1,80 @@
+name: Release
+
+# Renders the card against a real Home Assistant when a version tag is pushed,
+# attaches the screenshots to the release, and rewrites the release notes as the
+# changelog entry for that version plus a gallery of those screenshots.
+#
+# They are attached as release assets rather than workflow artifacts on purpose:
+# artifacts expire (90 days by default), release assets do not, and their URLs
+# are deterministic, so the notes can link them.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)build the release notes for
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Cache theme downloads
+        uses: actions/cache@v4
+        with:
+          path: tests/.theme-cache
+          key: themes-${{ hashFiles('tests/install-themes.sh') }}
+
+      - name: Render the card and the theme sweep
+        env:
+          SWEEP_THEMES: "1"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: tests/render.sh stable
+
+      # Release assets are a flat namespace, so the theme captures are prefixed
+      # rather than relying on their directory to keep them distinct.
+      - name: Collect the screenshots
+        run: |
+          mkdir -p upload
+          cp tests/screenshots/*.png upload/
+          for file in tests/screenshots/themes/*.png; do
+            cp "$file" "upload/theme-$(basename "$file")"
+          done
+          ls -la upload
+
+      - name: Compose the release notes
+        id: notes
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          {
+            node scripts/changelog.mjs notes "$VERSION"
+            echo
+            echo
+            node scripts/gallery.mjs "$TAG"
+          } > notes.md
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          wc -l notes.md
+
+      # `just release` may have created the release already; either way this
+      # ends with the same assets and notes.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.notes.outputs.tag }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --notes "pending screenshots"
+          fi
+          gh release upload "$TAG" ha-range-entities-slider.js upload/*.png --clobber
+          gh release edit "$TAG" --notes-file notes.md

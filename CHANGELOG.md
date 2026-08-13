@@ -33,6 +33,15 @@ promotes that section to the new version and refuses to run if it is empty.
   row under a curated selection, failing if the range handle is left unpainted
   under any of them. Runs weekly in CI.
 
+- Release workflow: pushing a `v*` tag renders the card and the theme sweep,
+  attaches the screenshots to the release, and rewrites its notes as the
+  changelog entry plus a gallery of those captures. They are release assets, not
+  workflow artifacts, so they do not expire and the notes can link them.
+- The theme sweep writes `manifest.json` alongside its captures, recording which
+  theme and mode each file holds — the filenames alone are ambiguous, since
+  `graphite-light.png` is the Graphite Light theme rather than Graphite in light
+  mode.
+
 ### Changed
 
 - The handles no longer push each other: dragging one up to the other stops it

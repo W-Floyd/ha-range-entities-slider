@@ -12,7 +12,12 @@
  * verified to pass on both stable and beta; set STRICT_THUMBS=0 to downgrade it
  * to a warning if upstream churn makes it noisy.
  */
-import { existsSync, mkdirSync, renameSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { chromium } from "playwright";
 
 const HA_URL = process.env.HA_URL ?? "http://ha:8123";
@@ -778,7 +783,10 @@ try {
         if (existsSync(from) && !existsSync(to)) renameSync(from, to);
       }
       const row = results.find((r) => r.theme === theme);
-      if (row) row.colorScheme = "static";
+      if (row) {
+        row.colorScheme = "static";
+        if (existsSync(`${themeDir}/${slug}.png`)) row.file = `${slug}.png`;
+      }
     };
 
     for (const colorScheme of ["light", "dark"]) {
@@ -850,10 +858,14 @@ try {
         }
 
         const handles = await row.evaluate(HANDLE_PROBE);
-        results.push({ theme, colorScheme, ...handles });
-
         const slug = theme.toLowerCase().replace(/[^a-z0-9]+/g, "-");
         const suffix = `-${colorScheme}`;
+        results.push({
+          theme,
+          colorScheme,
+          file: `${slug}${suffix}.png`,
+          ...handles,
+        });
         await page
           .locator("hui-entities-card")
           .first()
@@ -982,6 +994,19 @@ try {
         `material-you indicator keeps a gap beside both handles in ${result.colorScheme} (${result.indicatorMargin})`,
       );
     }
+
+    // Filenames alone are ambiguous — "graphite-light.png" is the Graphite
+    // Light theme, not Graphite in light mode — so record what each file holds.
+    writeFileSync(
+      `${themeDir}/manifest.json`,
+      `${JSON.stringify(
+        results
+          .filter((r) => r.file && !r.error)
+          .map(({ file, theme, colorScheme }) => ({ file, theme, colorScheme })),
+        null,
+        2,
+      )}\n`,
+    );
 
     if (skipped.length) {
       console.log(
