@@ -71,6 +71,9 @@ promotes that section to the new version and refuses to run if it is empty.
   `graphite-light.png` is the Graphite Light theme rather than Graphite in light
   mode.
 
+- Development, testing and release documentation moved out of the README into
+  DEVELOPMENT.md, leaving the README to installation, usage and configuration.
+
 ### Changed
 
 - The handles no longer push each other: dragging one up to the other stops it
