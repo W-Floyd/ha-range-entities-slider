@@ -309,12 +309,16 @@ async function captureOverview(page, file) {
       ?.shadowRoot?.querySelector("notification-manager");
     if (manager) manager.style.display = "none";
   });
-  const cards = await page.locator("hui-entities-card").evaluateAll((nodes) =>
-    nodes.map((n) => {
-      const r = n.getBoundingClientRect();
-      return { x: r.x, y: r.y, right: r.right, bottom: r.bottom };
-    }),
-  );
+  // A row that renders a warning draws outside its card's box, so the warnings
+  // are measured too rather than being cropped off the bottom.
+  const cards = await page
+    .locator("hui-entities-card, hui-warning")
+    .evaluateAll((nodes) =>
+      nodes.map((n) => {
+        const r = n.getBoundingClientRect();
+        return { x: r.x, y: r.y, right: r.right, bottom: r.bottom };
+      }),
+    );
   const pad = 12;
   const clip = cards.length
     ? {
@@ -368,7 +372,7 @@ const browser = await chromium.launch();
 try {
   for (const colorScheme of ["light", "dark"]) {
     const context = await browser.newContext({
-      viewport: { width: 1400, height: 800 },
+      viewport: { width: 1400, height: 1200 },
       colorScheme,
       deviceScaleFactor: 2,
     });
@@ -661,9 +665,10 @@ try {
         offline?.sliderDisabled === true,
         `an unavailable entity disables the slider (${offline?.sliderDisabled})`,
       );
+      // The stock row shows an em dash for an entity with no usable state.
       expect(
-        /unavailable/i.test(offline?.state?.[0] ?? ""),
-        `an unavailable entity says so (${offline?.state?.[0]})`,
+        offline?.state?.[0] === "—",
+        `an unavailable entity reads as the stock row does (${offline?.state?.[0]}, expected —)`,
       );
       expect(
         offline?.state?.[1] === "70",
@@ -777,7 +782,59 @@ try {
           `drag writes the pair in order (lower=${states.state} upper=${upperState.state})`,
         );
 
-        // The mismatched pair spans 15-30 because the ranges are merged, so the
+        // Dragging a handle should raise that handle's value popup, as the stock
+      // row does, and leave the other handle's alone.
+      const popupState = () =>
+        row.evaluate((el) =>
+          [
+            ...(el.shadowRoot
+              ?.querySelector("ha-slider")
+              ?.shadowRoot?.querySelectorAll("wa-tooltip") ?? []),
+          ].map((t) => ({
+            id: t.id,
+            open: t.hasAttribute("open") || t.open === true,
+            text: (t.textContent ?? "").trim(),
+          })),
+        );
+      const maxThumb = await row.evaluate((el) => {
+        const node = el.shadowRoot
+          ?.querySelector("ha-slider")
+          ?.shadowRoot?.querySelector("#thumb-max");
+        const r = node?.getBoundingClientRect();
+        return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+      });
+      if (maxThumb) {
+        await page.mouse.move(maxThumb.x, maxThumb.y);
+        await page.mouse.down();
+        await page.mouse.move(maxThumb.x + 20, maxThumb.y, { steps: 6 });
+        await page.waitForTimeout(400);
+        const during = await popupState();
+        await page.mouse.up();
+        await page.waitForTimeout(400);
+        const after = await popupState();
+        console.log(`popup while dragging: ${JSON.stringify(during)}`);
+
+        const dragged = during.find((t) => t.id === "tooltip-thumb-max");
+        const idle = during.find((t) => t.id === "tooltip-thumb-min");
+        expect(
+          dragged?.open === true,
+          `dragging a handle opens its value popup (${dragged?.open})`,
+        );
+        expect(
+          !!dragged?.text && dragged.text !== idle?.text,
+          `the popup follows the handle being dragged (${dragged?.text} vs ${idle?.text})`,
+        );
+        expect(
+          idle?.open === false,
+          `the other handle's popup stays closed (${idle?.open})`,
+        );
+        expect(
+          after.every((t) => !t.open),
+          "the popup closes when the drag ends",
+        );
+      }
+
+      // The mismatched pair spans 15-30 because the ranges are merged, so the
         // lower handle can reach values its own entity (max 20) would reject.
         // Dragging it to the far right must write 20, not what the slider shows.
         // By configured name rather than position, so inserting a row above it
@@ -915,7 +972,7 @@ try {
 
     for (const colorScheme of ["light", "dark"]) {
       const context = await browser.newContext({
-        viewport: { width: 1400, height: 800 },
+        viewport: { width: 1400, height: 1200 },
         colorScheme,
         deviceScaleFactor: 2,
       });
@@ -982,12 +1039,54 @@ try {
         }
 
         const handles = await row.evaluate(HANDLE_PROBE);
+
+        // material-you narrows the handle and tightens the gap while a value
+        // popup is open. Its own rules key off #tooltip, which a range slider
+        // does not have, so the card mirrors them per handle — check they fire.
+        let dragShape = null;
+        if (/material you/i.test(theme)) {
+          const thumb = await row.evaluate((el) => {
+            const node = el.shadowRoot
+              ?.querySelector("ha-slider")
+              ?.shadowRoot?.querySelector("#thumb-max");
+            const r = node?.getBoundingClientRect();
+            return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+          });
+          if (thumb) {
+            const measure = () =>
+              row.evaluate((el) => {
+                const shadow = el.shadowRoot
+                  ?.querySelector("ha-slider")?.shadowRoot;
+                const t = shadow?.querySelector("#thumb-max");
+                const i = shadow?.querySelector("#indicator");
+                return {
+                  thumbScale: t ? getComputedStyle(t).scale : null,
+                  barScale: t ? getComputedStyle(t, "::before").scale : null,
+                  indicatorMargin: i
+                    ? getComputedStyle(i).marginInlineEnd
+                    : null,
+                };
+              });
+            const idle = await measure();
+            await page.mouse.move(thumb.x, thumb.y);
+            await page.mouse.down();
+            await page.mouse.move(thumb.x + 12, thumb.y, { steps: 5 });
+            await page.waitForTimeout(400);
+            const active = await measure();
+            await page.mouse.up();
+            await page.waitForTimeout(300);
+            dragShape = { idle, active };
+            console.log(`\ndrag shape: ${JSON.stringify(dragShape)}`);
+          }
+        }
+
         const slug = theme.toLowerCase().replace(/[^a-z0-9]+/g, "-");
         const suffix = `-${colorScheme}`;
         results.push({
           theme,
           colorScheme,
           file: `${slug}${suffix}.png`,
+          dragShape,
           ...handles,
         });
         await captureOverview(page, `${themeDir}/${slug}${suffix}.png`);
@@ -996,7 +1095,7 @@ try {
           // A dedicated high-DPI context, so the crops are big enough to judge
           // corner radii rather than anti-aliasing.
           const zoomContext = await browser.newContext({
-            viewport: { width: 1400, height: 800 },
+            viewport: { width: 1400, height: 1200 },
             colorScheme,
             deviceScaleFactor: 8,
           });
@@ -1109,9 +1208,27 @@ try {
         result.indicatorRadius === "2px",
         `material-you indicator is rounded against both handles in ${result.colorScheme} (${result.indicatorRadius})`,
       );
+      // The handle should visibly react to being dragged, as the stock row does.
+      if (result.dragShape) {
+        const { idle, active } = result.dragShape;
+        expect(
+          active.thumbScale !== idle.thumbScale ||
+            active.barScale !== idle.barScale,
+          `material-you narrows the handle while dragging in ${result.colorScheme} (${idle.thumbScale}/${idle.barScale} -> ${active.thumbScale}/${active.barScale})`,
+        );
+        // The gap animates, so a reading taken mid-transition lands near 4px
+        // rather than on it.
+        expect(
+          Math.abs(parseFloat(active.indicatorMargin) - 4) < 0.5,
+          `and tightens the gap to it in ${result.colorScheme} (${active.indicatorMargin})`,
+        );
+      }
+
       // Without the gap the thumb's negative rect covers that rounded end.
       expect(
-        result.indicatorMargin === "6px 6px",
+        (result.indicatorMargin ?? "")
+          .split(" ")
+          .every((value) => Math.abs(parseFloat(value) - 6) < 0.5),
         `material-you indicator keeps a gap beside both handles in ${result.colorScheme} (${result.indicatorMargin})`,
       );
     }

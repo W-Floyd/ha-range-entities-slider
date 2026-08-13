@@ -54,6 +54,8 @@ views:
             entity: number.number_offline
             range_entity: number.number_high
             name: Unavailable entity
+          - entity: number.number_offline
+            name: Unavailable (stock row)
           - type: custom:range-entity-row
             entity: input_number.does_not_exist
             range_entity: input_number.upper_temp

@@ -246,9 +246,9 @@ class RangeEntityRow extends LitElement {
       this.config.warn_inverted !== false;
     const readout = (entityId, value) => {
       const stateObj = this.hass.states[entityId];
-      if (!this._isNumeric(entityId)) {
-        return this.hass.formatEntityState?.(stateObj) ?? stateObj.state;
-      }
+      // An em dash, which is what the stock row shows for an entity with no
+      // usable state.
+      if (!this._isNumeric(entityId)) return "—";
       // Alongside an unavailable partner the two are not a range, so each
       // entity shows its own state rather than a sorted pair.
       return this._formatValue(
@@ -353,6 +353,23 @@ class RangeEntityRow extends LitElement {
             4px 0 0 var(--ha-slider-thumb-negative-color),
             -4px 0 0 var(--ha-slider-thumb-negative-color) !important;
         }
+        /* Dragging: the utilities narrow the handle and tighten the gap while a
+           value tooltip is open, keyed on #tooltip — which a range slider does
+           not have, since its tooltips are per handle. Same treatment, keyed on
+           the handle actually being dragged. */
+        :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #thumb-min,
+        :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #thumb-max {
+          scale: 0.66667 1;
+        }
+        :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #thumb-min::before,
+        :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #thumb-max::before {
+          scale: 0.75 1;
+        }
+        :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #indicator,
+        :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #indicator {
+          margin-inline: 4px !important;
+        }
+
         /* The utilities' own ::after shapes the right-hand inner corner; this is
            the same shape mirrored onto the left. */
         :host([range]) #indicator::before {

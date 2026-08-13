@@ -95,6 +95,11 @@ promotes that section to the new version and refuses to run if it is empty.
   them, with an exclamation icon in the error colour explaining it on hover, and
   the new `warn_inverted: false` option opts out.
 
+- Under material-you the handle now narrows and the gap tightens while it is
+  being dragged, as the stock row's does. The theme keys that off `#tooltip`,
+  which a range slider does not have — its popups are per handle — so those
+  rules never matched and the handle sat still.
+
 ### Fixed
 
 - A row whose entity Home Assistant does not have rendered nothing at all, which
@@ -107,6 +112,8 @@ promotes that section to the new version and refuses to run if it is empty.
 - Values are clamped to each entity's own `min`/`max` before being written. The
   slider spans the widest range across the pair, so a handle could reach a value
   its own entity would reject.
+- An unavailable entity read as "Unavailable", which is both unlike the stock
+  row — it shows an em dash — and too long for the column, wrapping mid-word.
 - The unit could disappear from the readout under a theme with a wide font — the
   two-line readout wrapped it onto a third line the row height clipped. Each
   value now stays on one line.
