@@ -15,7 +15,7 @@
 import { LitElement, html, css } from "https://unpkg.com/lit@2/index.js?module";
 
 // Single source of truth for the version; bumped by `just bump`.
-const VERSION = "0.0.0";
+const VERSION = "0.1.0";
 
 class RangeEntityRow extends LitElement {
   static get properties() {
