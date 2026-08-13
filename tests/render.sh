@@ -141,13 +141,13 @@ if [[ "${SWEEP_THEMES:-0}" == "1" ]]; then
   # Keep the resolved theme commits beside the screenshots they produced.
   mkdir -p "$OUT_DIR"
   cp "$workdir/theme-versions.txt" "$OUT_DIR/theme-versions.txt"
-  # card-mod goes first: themes that use card-mod-theme keys need it loaded
-  # before their styles can apply.
-  for module in card-mod.js material-you-utilities.min.js; do
-    if [[ -f "$workdir/www/$module" ]]; then
-      printf -- '- url: /local/%s\n  type: module\n' "$module" >>"$workdir/resources.yaml"
-    fi
-  done
+  # Whatever the packs asked for, in the order they declared it: card-mod first,
+  # since themes that use card-mod-theme keys need it loaded before their styles
+  # can apply.
+  while read -r url type; do
+    [[ -n "$url" ]] || continue
+    printf -- '- url: %s\n  type: %s\n' "$url" "$type" >>"$workdir/resources.yaml"
+  done <"$workdir/theme-resources.txt"
 fi
 
 printf -- '- url: /local/ha-range-entities-slider.js\n  type: module\n' >>"$workdir/resources.yaml"

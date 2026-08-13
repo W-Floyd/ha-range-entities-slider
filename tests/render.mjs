@@ -48,6 +48,7 @@ const CURATED_THEMES = [
   "ios-light-mode-light-blue",
   "ios-dark-mode-dark-blue",
   "macOS Theme",
+  "LCARS Default",
 ];
 
 /** Scaffolding themes the packs ship for inheritance, not for use. */

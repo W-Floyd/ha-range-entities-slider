@@ -29,20 +29,28 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cache="${THEME_CACHE:-$ROOT/tests/.theme-cache}"
 
-# repo | extra file to drop into www/ (optional)
+# repo | where its theme files live | dashboard resources it needs
 #
-# card-mod carries no themes of its own: several of the packs below use
-# card-mod-theme keys and silently lose those styles without it.
+# Theme paths default to themes/*.yaml; packs that build elsewhere say so.
+# Resources are comma separated `path>type`, where a path may be a file inside
+# the repo (copied to www/ and served from /local/) or a URL. Order matters and
+# is preserved: card-mod is first because several packs put their styling behind
+# card-mod-theme keys and silently lose it when card-mod loads late or not
+# at all.
 THEMES=(
-  "thomasloven/lovelace-card-mod|card-mod.js"
-  "Nerwyn/material-you-theme|"
-  "Nerwyn/material-you-utilities|dist/material-you-utilities.min.js"
-  "catppuccin/home-assistant|"
-  "Nezz/homeassistant-visionos-theme|"
-  "Madelena/Metrology-for-Hass|"
-  "TilmanGriesel/graphite|"
-  "basnijholt/lovelace-ios-themes|"
-  "JuanMTech/macOS-Theme|"
+  "thomasloven/lovelace-card-mod||card-mod.js>module"
+  "Nerwyn/material-you-theme||"
+  "Nerwyn/material-you-utilities||dist/material-you-utilities.min.js>module"
+  "catppuccin/home-assistant||"
+  "Nezz/homeassistant-visionos-theme||"
+  "Madelena/Metrology-for-Hass||"
+  "TilmanGriesel/graphite||"
+  "basnijholt/lovelace-ios-themes||"
+  "JuanMTech/macOS-Theme||"
+  # LCARS ships its themes flattened into one file outside themes/, and its
+  # README requires both a script and a font stylesheet as resources. Antonio is
+  # the Google Fonts option; the alternative, Tungsten, is not redistributable.
+  "th3jesta/ha-lcars|theme_flat/lcars_flat.yaml|lcars.js>js,https://fonts.googleapis.com/css2?family=Antonio:wght@400;700&display=swap>css"
 )
 
 resolve() {
@@ -80,10 +88,11 @@ fi
 
 failed=0
 : >"$target/theme-versions.txt"
+: >"$target/theme-resources.txt"
 
 for entry in "${THEMES[@]}"; do
-  repo="${entry%%|*}"
-  extra="${entry##*|}"
+  IFS='|' read -r repo theme_paths resources <<<"$entry"
+  [[ -n "$repo" && "$repo" != \#* ]] || continue
   slug="${repo//\//-}"
 
   commit="$(lookup "$repo")"
@@ -134,23 +143,33 @@ for entry in "${THEMES[@]}"; do
     continue
   fi
 
-  if [[ -d "$tmp/themes" ]]; then
-    # Theme filenames can contain spaces (e.g. "Liquid Glass.yaml").
-    found=0
+  found=0
+  # Theme filenames can contain spaces (e.g. "Liquid Glass.yaml").
+  for pattern in ${theme_paths:-themes/*.yaml themes/*.yml}; do
     while IFS= read -r -d '' file; do
       cp "$file" "$target/themes/"
       found=$((found + 1))
-    done < <(find "$tmp/themes" -maxdepth 1 -type f \( -name '*.yaml' -o -name '*.yml' \) -print0)
-    echo "    ${found} theme file(s)"
-  fi
+    done < <(find "$tmp" -type f -path "$tmp/$pattern" -print0 2>/dev/null)
+  done
+  [[ "$found" -gt 0 ]] && echo "    ${found} theme file(s)"
 
-  if [[ -n "$extra" ]]; then
-    if [[ -f "$tmp/$extra" ]]; then
-      cp "$tmp/$extra" "$target/www/"
-      echo "    resource $(basename "$extra")"
-    else
-      echo "    warning: no ${extra} in ${repo}" >&2
-    fi
+  if [[ -n "$resources" ]]; then
+    IFS=',' read -ra wanted <<<"$resources"
+    for item in "${wanted[@]}"; do
+      path="${item%%>*}"
+      type="${item##*>}"
+      if [[ "$path" == http* ]]; then
+        echo "${path} ${type}" >>"$target/theme-resources.txt"
+        echo "    resource ${type}: ${path:0:48}…"
+      elif [[ -f "$tmp/$path" ]]; then
+        cp "$tmp/$path" "$target/www/"
+        echo "/local/$(basename "$path") ${type}" >>"$target/theme-resources.txt"
+        echo "    resource ${type}: $(basename "$path")"
+      else
+        echo "    warning: no ${path} in ${repo}" >&2
+        failed=$((failed + 1))
+      fi
+    done
   fi
 
   rm -rf "$tmp"
