@@ -42,3 +42,19 @@ views:
             entity: input_number.whole_low
             range_entity: input_number.whole_high
             name: Whole-number step
+          - type: custom:range-entity-row
+            entity: number.number_low
+            range_entity: number.number_high
+            name: number domain
+          - type: custom:range-entity-row
+            entity: input_number.narrow_low
+            range_entity: input_number.narrow_high
+            name: Mismatched ranges
+          - type: custom:range-entity-row
+            entity: number.number_offline
+            range_entity: number.number_high
+            name: Unavailable entity
+          - type: custom:range-entity-row
+            entity: input_number.does_not_exist
+            range_entity: input_number.upper_temp
+            name: Missing entity

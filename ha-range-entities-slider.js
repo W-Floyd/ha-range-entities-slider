@@ -45,6 +45,20 @@ class RangeEntityRow extends LitElement {
         '[range-entity-row] "range_entity" is required (upper handle)',
       );
     }
+    // input_number and number both carry min/max/step and take set_value, so
+    // both work; anything else would render but never write.
+    for (const [key, entityId] of [
+      ["entity", config.entity],
+      ["range_entity", config.range_entity],
+    ]) {
+      const domain = entityId.split(".")[0];
+      if (domain !== "input_number" && domain !== "number") {
+        throw new Error(
+          `[range-entity-row] "${key}" must be an input_number or number ` +
+            `entity, got ${entityId}`,
+        );
+      }
+    }
     this.config = config;
   }
 
@@ -55,8 +69,11 @@ class RangeEntityRow extends LitElement {
       const range = this._computeRange();
       if (!range) return;
       if (!this._interacting) {
-        this._lowerVal = Math.min(range.lowerVal, range.upperVal);
-        this._upperVal = Math.max(range.lowerVal, range.upperVal);
+        // An unavailable entity parses to NaN, and Math.min/max would spread
+        // that to both handles; fall back to the range's own bounds.
+        const values = [range.lowerVal, range.upperVal].filter(Number.isFinite);
+        this._lowerVal = values.length ? Math.min(...values) : range.min;
+        this._upperVal = values.length ? Math.max(...values) : range.max;
       }
 
       // The handles cannot be dragged past each other, so an inverted pair
@@ -84,6 +101,20 @@ class RangeEntityRow extends LitElement {
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  /** Entities the config names that Home Assistant does not know about. */
+  _missingEntities() {
+    if (!this.hass || !this.config) return [];
+    return [this.config.entity, this.config.range_entity].filter(
+      (entityId) => !this.hass.states[entityId],
+    );
+  }
+
+  /** An entity whose state is not a number cannot drive a slider. */
+  _isNumeric(entityId) {
+    const state = this.hass?.states[entityId]?.state;
+    return state !== undefined && Number.isFinite(parseFloat(state));
+  }
 
   _computeRange() {
     if (!this.hass || !this.config) return null;
@@ -179,8 +210,29 @@ class RangeEntityRow extends LitElement {
 
   render() {
     if (!this.hass || !this.config) return html``;
+
+    // A row that renders nothing is indistinguishable from one that is not
+    // there, so say what is wrong, as the stock rows do for the same case.
+    const missing = this._missingEntities();
+    if (missing.length) {
+      const message =
+        this.hass.localize?.(
+          "ui.panel.lovelace.warning.entity_not_found",
+          "entity",
+          missing.join(", "),
+        ) || `Entity not available: ${missing.join(", ")}`;
+      return html`<hui-warning>${message}</hui-warning>`;
+    }
+
     const range = this._computeRange();
     if (!range) return html``;
+
+    // An unavailable entity keeps its row, with the slider disabled and the
+    // state spelled out, rather than showing a handle at a value it does not
+    // have.
+    const unavailable = [this.config.entity, this.config.range_entity].filter(
+      (entityId) => !this._isNumeric(entityId),
+    );
 
     const { min, max, step } = range;
 
@@ -192,11 +244,23 @@ class RangeEntityRow extends LitElement {
       !this._interacting &&
       range.lowerVal > range.upperVal &&
       this.config.warn_inverted !== false;
-    const lower = this._formatValue(
+    const readout = (entityId, value) => {
+      const stateObj = this.hass.states[entityId];
+      if (!this._isNumeric(entityId)) {
+        return this.hass.formatEntityState?.(stateObj) ?? stateObj.state;
+      }
+      // Alongside an unavailable partner the two are not a range, so each
+      // entity shows its own state rather than a sorted pair.
+      return this._formatValue(
+        entityId,
+        unavailable.length ? parseFloat(stateObj.state) : value,
+      );
+    };
+    const lower = readout(
       this.config.entity,
       inverted ? range.lowerVal : this._lowerVal,
     );
-    const upper = this._formatValue(
+    const upper = readout(
       this.config.range_entity,
       inverted ? range.upperVal : this._upperVal,
     );
@@ -215,6 +279,7 @@ class RangeEntityRow extends LitElement {
           <ha-slider
             labeled
             range
+            .disabled=${unavailable.length > 0}
             .min=${min}
             .max=${max}
             .step=${step}
@@ -397,9 +462,19 @@ class RangeEntityRow extends LitElement {
   // ── HA service call ─────────────────────────────────────────────────────────
 
   _callService(entityId, value) {
-    this.hass.callService("input_number", "set_value", {
+    // min/max are merged across both entities so the slider can span the pair,
+    // which means a handle can reach a value its own entity would reject.
+    const attributes = this.hass.states[entityId]?.attributes ?? {};
+    const min = parseFloat(attributes.min);
+    const max = parseFloat(attributes.max);
+    let clamped = value;
+    if (Number.isFinite(min)) clamped = Math.max(min, clamped);
+    if (Number.isFinite(max)) clamped = Math.min(max, clamped);
+
+    // input_number.set_value and number.set_value take the same arguments.
+    this.hass.callService(entityId.split(".")[0], "set_value", {
       entity_id: entityId,
-      value,
+      value: clamped,
     });
   }
 
@@ -419,6 +494,10 @@ class RangeEntityRow extends LitElement {
       .state {
         min-width: 45px;
         text-align: end;
+        /* Each value stays on its own line: the readout is already two lines,
+           and a theme with a wide font would otherwise wrap the unit onto a
+           third that the row height clips away. */
+        white-space: nowrap;
       }
       .inverted-warning {
         color: var(--error-color, #db4437);

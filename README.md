@@ -4,8 +4,8 @@
 [![HA beta](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/beta.yml/badge.svg)](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/beta.yml)
 [![Themes](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/themes.yml/badge.svg)](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/themes.yml)
 
-A Home Assistant Lovelace **entity row** that renders two `input_number` entities as a single
-dual-handle range slider.
+A Home Assistant Lovelace **entity row** that renders two `input_number` or `number` entities as a
+single dual-handle range slider.
 
 Instead of stacking two separate number sliders in your dashboard, you get one row with a lower
 handle and an upper handle — useful for temperature bands, humidity targets, brightness windows,
@@ -34,7 +34,9 @@ your theme, name/icon overrides, and tap actions.
 
 ## Features
 
-- Single row, two handles, backed by two independent `input_number` entities
+- Single row, two handles, backed by two independent `input_number` or `number` entities
+- Missing entities render a warning naming them; an unavailable entity disables the slider and says
+  so, as the stock rows do
 - `min`, `max`, and `step` are derived automatically from the two entities' attributes
   (widest `min`/`max`, smallest `step`)
 - Unit of measurement picked up from either entity
@@ -44,6 +46,14 @@ your theme, name/icon overrides, and tap actions.
   flagged rather than silently reordered
 - Theme-aware handles: Home Assistant paints none on a range slider, so the row supplies them —
   bars under material-you, and the stock round knob everywhere else
+
+## Requirements
+
+Home Assistant **2026.8.0** or newer, and two `input_number` or `number` entities.
+
+Older versions mostly work — on 2026.6 every functional check still passes — but Home Assistant gave
+its slider rows horizontal gutters after that, so the row sits about 8px out of alignment with the
+rows around it on anything earlier.
 
 ## Installation
 
@@ -106,8 +116,8 @@ input_number:
 | Option              | Type   | Required | Description                                                        |
 | ------------------- | ------ | -------- | ------------------------------------------------------------------ |
 | `type`              | string | yes      | `custom:range-entity-row`                                          |
-| `entity`            | string | yes      | `input_number` entity backing the **lower** handle                  |
-| `range_entity`      | string | yes      | `input_number` entity backing the **upper** handle                  |
+| `entity`            | string | yes      | `input_number` or `number` entity backing the **lower** handle       |
+| `range_entity`      | string | yes      | `input_number` or `number` entity backing the **upper** handle       |
 | `name`              | string | no       | Overrides the row label                                            |
 | `warn_inverted`     | bool   | no       | Flag it when `range_entity` is below `entity` (default `true`)       |
 | `icon`              | string | no       | Overrides the row icon                                             |
@@ -129,8 +139,10 @@ suppress that and have the row present the pair in order instead.
 
 ## Notes and limitations
 
-- Only `input_number` entities are supported — updates are written with the
-  `input_number.set_value` service.
+- `input_number` and `number` entities are supported; the row writes with that entity's own
+  `set_value` service, and refuses any other domain at config time.
+- Values are clamped to each entity's own `min`/`max` before writing, since the slider spans the
+  widest range across the pair.
 - The card element registers as `range-entity-row`; the repository/file name is
   `ha-range-entities-slider` for historical reasons.
 - **Requires internet access on first load.** The module imports Lit from

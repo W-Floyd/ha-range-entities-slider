@@ -78,6 +78,14 @@ promotes that section to the new version and refuses to run if it is empty.
 - Development, testing and release documentation moved out of the README into
   DEVELOPMENT.md, leaving the README to installation, usage and configuration.
 
+- `number` entities are supported alongside `input_number`, writing with that
+  entity's own `set_value` service. Any other domain is refused at config time
+  rather than rendering a row that can never write.
+- `hacs.json` declares Home Assistant 2026.8.0 as the minimum. Older versions
+  mostly work — every functional check passes on 2026.6 — but Home Assistant gave
+  its slider rows horizontal gutters after that, so the row sits about 8px out of
+  alignment with its neighbours on anything earlier.
+
 ### Changed
 
 - The handles no longer push each other: dragging one up to the other stops it
@@ -88,6 +96,20 @@ promotes that section to the new version and refuses to run if it is empty.
   the new `warn_inverted: false` option opts out.
 
 ### Fixed
+
+- A row whose entity Home Assistant does not have rendered nothing at all, which
+  is indistinguishable from the row being absent. It now shows a warning naming
+  the entity, as the stock rows do.
+- An unavailable entity produced `NaN` for itself and for its partner, since the
+  values are sorted together. The row now keeps its place with the slider
+  disabled, spells out the unavailable state, and leaves the partner's own value
+  intact.
+- Values are clamped to each entity's own `min`/`max` before being written. The
+  slider spans the widest range across the pair, so a handle could reach a value
+  its own entity would reject.
+- The unit could disappear from the readout under a theme with a wide font — the
+  two-line readout wrapped it onto a third line the row height clipped. Each
+  value now stays on one line.
 
 - Values are formatted like the stock `input_number` row: decimal places from
   each entity's own `step`, the user's number format setting, and each entity's

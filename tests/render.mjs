@@ -301,6 +301,14 @@ const HANDLE_PROBE = (el) => {
  * otherwise leave most of the image empty.
  */
 async function captureOverview(page, file) {
+  // Home Assistant raises a "started" toast on boot which would otherwise sit
+  // across the bottom of every capture.
+  await page.evaluate(() => {
+    const manager = document
+      .querySelector("home-assistant")
+      ?.shadowRoot?.querySelector("notification-manager");
+    if (manager) manager.style.display = "none";
+  });
   const cards = await page.locator("hui-entities-card").evaluateAll((nodes) =>
     nodes.map((n) => {
       const r = n.getBoundingClientRect();
@@ -569,6 +577,8 @@ try {
           const slider = shadow?.querySelector("ha-slider");
           const icon = shadow?.querySelector("ha-icon.inverted-warning");
           return {
+            warningRow: shadow?.querySelector("hui-warning")?.textContent?.trim() ?? null,
+            sliderDisabled: slider?.hasAttribute("disabled") ?? null,
             name: el.config?.name ?? null,
             entity: el.config?.entity ?? null,
             rangeEntity: el.config?.range_entity ?? null,
@@ -634,6 +644,38 @@ try {
           inverted.warningColor === inverted.stateColor &&
           inverted.warningColor !== "rgb(0, 0, 0)",
         `inverted row is coloured with the error colour (${inverted?.warningColor}, theme --error-color ${inverted?.errorColor})`,
+      );
+
+      // A row for an entity Home Assistant does not have must say so rather
+      // than rendering nothing, which is indistinguishable from being absent.
+      const gone = byName["Missing entity"];
+      expect(
+        !!gone?.warningRow?.includes("input_number.does_not_exist"),
+        `a missing entity renders a warning naming it (${gone?.warningRow})`,
+      );
+
+      // An unavailable entity keeps its row, with the slider disabled, its own
+      // state spelled out, and its partner's value intact rather than NaN.
+      const offline = byName["Unavailable entity"];
+      expect(
+        offline?.sliderDisabled === true,
+        `an unavailable entity disables the slider (${offline?.sliderDisabled})`,
+      );
+      expect(
+        /unavailable/i.test(offline?.state?.[0] ?? ""),
+        `an unavailable entity says so (${offline?.state?.[0]})`,
+      );
+      expect(
+        offline?.state?.[1] === "70",
+        `its available partner still shows its own value (${offline?.state?.[1]})`,
+      );
+
+      // number is the modern equivalent of input_number and takes the same
+      // set_value call.
+      const numberRow = byName["number domain"];
+      expect(
+        numberRow?.minValue === 30 && numberRow?.maxValue === 70,
+        `a number entity pair drives the slider (${numberRow?.minValue}/${numberRow?.maxValue})`,
       );
 
       // warn_inverted: false opts out: no icon, values presented in order.
@@ -734,6 +776,44 @@ try {
           parseFloat(states.state) <= parseFloat(upperState.state),
           `drag writes the pair in order (lower=${states.state} upper=${upperState.state})`,
         );
+
+        // The mismatched pair spans 15-30 because the ranges are merged, so the
+        // lower handle can reach values its own entity (max 20) would reject.
+        // Dragging it to the far right must write 20, not what the slider shows.
+        // By configured name rather than position, so inserting a row above it
+        // cannot silently point this at something else.
+        const narrowIndex = await page
+          .locator("range-entity-row")
+          .evaluateAll((rows) =>
+            rows.findIndex((el) => el.config?.name === "Mismatched ranges"),
+          );
+        const narrowRow = page.locator("range-entity-row").nth(narrowIndex);
+        const narrowThumb = await narrowRow
+          .evaluate((el) => {
+            const thumb = el.shadowRoot
+              ?.querySelector("ha-slider")
+              ?.shadowRoot?.querySelector("#thumb-min");
+            const r = thumb?.getBoundingClientRect();
+            return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+          })
+          .catch(() => null);
+        if (narrowThumb) {
+          await page.mouse.move(narrowThumb.x, narrowThumb.y);
+          await page.mouse.down();
+          await page.mouse.move(trackBox.right + 60, narrowThumb.y, { steps: 12 });
+          await page.mouse.up();
+          await page.waitForTimeout(750);
+          const narrow = await (
+            await fetch(`${HA_URL}/api/states/input_number.narrow_low`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+          ).json();
+          console.log(`narrow_low after dragging past its max: ${narrow.state}`);
+          expect(
+            parseFloat(narrow.state) === 20,
+            `a handle dragged past its own entity's max writes that max (${narrow.state}, expected 20)`,
+          );
+        }
 
         // Put them back so the screenshots below are the documented values.
         await fetch(`${HA_URL}/api/services/input_number/set_value`, {

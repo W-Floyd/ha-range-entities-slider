@@ -1,7 +1,8 @@
 {
   "name": "Range Entity Row",
-  "description": "A custom entity row for input_number that lets you bind a second entity as a dynamic min or max.",
+  "description": "An entity row that renders two input_number or number entities as one dual-handle range slider.",
   "render_readme": true,
   "content_in_root": true,
-  "filename": "ha-range-entities-slider.js"
+  "filename": "ha-range-entities-slider.js",
+  "homeassistant": "2026.8.0"
 }
