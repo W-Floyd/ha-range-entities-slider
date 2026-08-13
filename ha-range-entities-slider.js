@@ -14,6 +14,9 @@
  */
 import { LitElement, html, css } from "https://unpkg.com/lit@2/index.js?module";
 
+// Single source of truth for the version; bumped by `just bump`.
+const VERSION = "0.0.0";
+
 class RangeEntityRow extends LitElement {
   static get properties() {
     return {
@@ -260,7 +263,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c RANGE-ENTITY-ROW %c Loaded ",
+  `%c RANGE-ENTITY-ROW %c ${VERSION} `,
   "color:#fff;background:#4caf50;font-weight:bold;padding:2px 4px;border-radius:3px 0 0 3px",
   "color:#4caf50;background:#f0f0f0;font-weight:bold;padding:2px 4px;border-radius:0 3px 3px 0",
 );
