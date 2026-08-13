@@ -14,6 +14,24 @@ or any "from X to Y" setting stored as a pair of `input_number` helpers.
 The row is built on Home Assistant's own `hui-generic-entity-row` and `ha-slider`, so it inherits
 your theme, name/icon overrides, and tap actions.
 
+<!--
+  Rendered against a real Home Assistant by the release workflow and attached to
+  the release, so these stay current without committing images to the repository.
+  /releases/latest/download/ always resolves to the newest release, and the asset
+  names are fixed, so this needs no updating — it is blank until the first
+  release publishes those assets.
+-->
+<picture>
+  <source
+    media="(prefers-color-scheme: dark)"
+    srcset="https://github.com/W-Floyd/ha-range-entities-slider/releases/latest/download/overview-stable-dark.png"
+  />
+  <img
+    alt="The row above the stock input_number slider rows it is modelled on, then the edge cases"
+    src="https://github.com/W-Floyd/ha-range-entities-slider/releases/latest/download/overview-stable-light.png"
+  />
+</picture>
+
 ## Features
 
 - Single row, two handles, backed by two independent `input_number` entities

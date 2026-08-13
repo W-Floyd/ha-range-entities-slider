@@ -71,6 +71,10 @@ promotes that section to the new version and refuses to run if it is empty.
   `graphite-light.png` is the Graphite Light theme rather than Graphite in light
   mode.
 
+- The README shows the card rendered against a real Home Assistant, in light or
+  dark to match the reader, embedded from the latest release's assets rather than
+  from images committed here. The URLs need no updating as releases come and go,
+  and a render fails if a capture the README embeds is no longer produced.
 - Development, testing and release documentation moved out of the README into
   DEVELOPMENT.md, leaving the README to installation, usage and configuration.
 

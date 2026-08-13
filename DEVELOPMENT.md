@@ -144,3 +144,8 @@ captures.
 
 `just release` and the workflow both tolerate the other having gone first, so it does not matter
 which creates the release.
+
+The README embeds `overview-stable-light.png` and `overview-stable-dark.png` through
+`releases/latest/download/`, which always resolves to the newest release. The capture names are
+fixed, so the README never needs updating and no images are committed — but it does mean renaming
+those two captures breaks it, and that they are blank until the first release publishes them.

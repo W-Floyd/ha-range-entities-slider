@@ -190,6 +190,20 @@ if [[ "$status" != "0" ]]; then
   exit "$status"
 fi
 
+# The README embeds captures straight from the latest release, so a rename here
+# would blank it silently. Check the names it expects were actually produced.
+missing=0
+while read -r asset; do
+  [[ -n "$asset" ]] || continue
+  if [[ ! -f "$OUT_DIR/$asset" ]]; then
+    echo "error: README embeds ${asset}, which this run did not produce" >&2
+    missing=$((missing + 1))
+  fi
+done < <(grep -oE 'releases/latest/download/[^"]+\.png' "$ROOT/README.md" 2>/dev/null | sed 's|.*/||' | sort -u)
+if [[ "$missing" -gt 0 ]]; then
+  exit 1
+fi
+
 # Record what this fingerprint was rendered against, including the version the
 # instance actually reported rather than just the tag that was asked for.
 mkdir -p "$stamp_dir"
