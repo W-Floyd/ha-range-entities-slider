@@ -1,0 +1,19 @@
+name: HA stable
+
+# Renders against the current Home Assistant release: the status users are on.
+# Runs daily because a fingerprint that has not moved costs seconds — the
+# expensive path only happens when Home Assistant, a theme or Lit has changed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  stable:
+    uses: ./.github/workflows/render.yml
+    with:
+      ha_versions: '["stable"]'

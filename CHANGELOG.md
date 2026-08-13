@@ -46,6 +46,10 @@ promotes that section to the new version and refuses to run if it is empty.
 - One screenshot per colour scheme of a single list holding the custom row, the
   stock rows and the edge cases, replacing four separate element captures. The
   theme sweep frames its captures the same way.
+- Separate status badges for Home Assistant stable, beta and the theme sweep.
+  A badge reports one workflow, so each is a thin caller of the shared render
+  workflow rather than a copy of it. Stable and beta run daily now that an
+  unchanged run is restored rather than re-rendered.
 - Release workflow: pushing a `v*` tag renders the card and the theme sweep,
   attaches the screenshots to the release, and rewrites its notes as the
   changelog entry plus a gallery of those captures. They are release assets, not

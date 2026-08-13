@@ -1,19 +1,16 @@
 name: Render
 
-# Renders the card in a real Home Assistant and checks it. The weekly run is the
-# point of the matrix: the card patches ha-slider's private shadow DOM by id, so
-# an upstream frontend change can break it without this repo changing at all.
+# Renders the card in a real Home Assistant and checks it.
 #
-# Also callable by other workflows (the release builds its screenshots this way)
-# so the render is defined once.
+# The scheduled callers are the point: the card patches ha-slider's private
+# shadow DOM by id, so an upstream frontend change can break it without this
+# repo changing at all. A run whose fingerprint matches the last one restores
+# its screenshots instead of rendering, so a scheduled check costs seconds
+# unless Home Assistant, a theme pack, or the Lit build has actually moved.
 
+# Callable only. The triggers live in the workflows that call it — stable.yml,
+# beta.yml, themes.yml and release.yml — so each gets its own status badge.
 on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule:
-    - cron: "0 6 * * 1"
-  workflow_dispatch:
   workflow_call:
     inputs:
       ha_versions:
@@ -85,57 +82,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact_prefix || 'screenshots' }}-${{ matrix.ha_version }}
-          path: tests/screenshots/
-          if-no-files-found: warn
-
-  # Downloads the custom theme packs and captures the row under a curated set of
-  # them. Kept off the push/PR path because it pulls nine repositories and
-  # renders 18 combinations. Skipped when this workflow is called, since the
-  # caller asks for the sweep through the `sweep` input instead.
-  themes:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Resolve theme versions
-        id: themes
-        run: |
-          echo "key=$(tests/install-themes.sh --versions | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache theme downloads
-        uses: actions/cache@v4
-        with:
-          path: tests/.theme-cache
-          key: themes-${{ steps.themes.outputs.key }}
-          restore-keys: themes-
-
-      - name: Fingerprint the render
-        id: fingerprint
-        env:
-          SWEEP_THEMES: "1"
-        run: |
-          echo "key=$(tests/render.sh --fingerprint stable)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore an identical render
-        uses: actions/cache@v4
-        with:
-          path: |
-            tests/screenshots
-            tests/.render-cache
-          key: render-${{ steps.fingerprint.outputs.key }}
-
-      - name: Render under custom themes
-        env:
-          SWEEP_THEMES: "1"
-          # Raises the GitHub API rate limit for the theme tarball downloads.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: tests/render.sh stable
-
-      - name: Upload theme screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots-themes
           path: tests/screenshots/
           if-no-files-found: warn

@@ -1,0 +1,15 @@
+name: HA beta
+
+# Renders against the next Home Assistant release, so a break shows up here
+# before it reaches anyone's dashboard.
+
+on:
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  beta:
+    uses: ./.github/workflows/render.yml
+    with:
+      ha_versions: '["beta"]'

@@ -1,5 +1,9 @@
 # ha-range-entities-slider
 
+[![HA stable](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/stable.yml/badge.svg)](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/stable.yml)
+[![HA beta](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/beta.yml/badge.svg)](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/beta.yml)
+[![Themes](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/themes.yml/badge.svg)](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/themes.yml)
+
 A Home Assistant Lovelace **entity row** that renders two `input_number` entities as a single
 dual-handle range slider.
 
@@ -147,8 +151,14 @@ requirement — the browser and Playwright itself live in the image built from
 It checks that the row mounts, the slider is in range mode, `min`/`max`/`step` and both handles
 follow the entities, and that the Material You patch actually lands inside `ha-slider`'s shadow
 root. That last one matters most: the patch targets private ids (`#thumb-min`, `#thumb-max`,
-`#indicator`) that upstream can rename at any time, which is why
-[the workflow](.github/workflows/render.yml) runs it weekly against `stable` and `beta`.
+`#indicator`) that upstream can rename at any time.
+
+[render.yml](.github/workflows/render.yml) holds the render and is called by the workflows behind the
+badges above — [stable](.github/workflows/stable.yml) and [beta](.github/workflows/beta.yml) daily,
+[themes](.github/workflows/themes.yml) weekly — so each reports its own status while the render
+itself is defined once. A scheduled run whose fingerprint has not moved restores its screenshots in
+seconds, so the daily cadence costs little; a failure means Home Assistant, a theme pack, or the Lit
+build actually changed.
 
 Screenshots land in `tests/screenshots/` (gitignored, uploaded as CI artifacts) — one capture per
 colour scheme, of a single list holding the custom row, the stock `input_number` slider rows for the
