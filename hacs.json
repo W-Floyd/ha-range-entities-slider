@@ -2,7 +2,6 @@
   "name": "Range Entity Row",
   "description": "An entity row that renders two input_number or number entities as one dual-handle range slider.",
   "render_readme": true,
-  "content_in_root": true,
   "filename": "ha-range-entities-slider.js",
   "homeassistant": "2026.8.0"
 }

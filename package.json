@@ -1,0 +1,23 @@
+{
+  "name": "ha-range-entities-slider",
+  "private": true,
+  "type": "module",
+  "description": "A Home Assistant entity row rendering two input_number or number entities as one dual-handle range slider.",
+  "license": "MIT",
+  "scripts": {
+    "build": "esbuild src/range-entity-row.ts --bundle --format=esm --target=es2021 --legal-comments=none --outfile=ha-range-entities-slider.js --banner:js=\"$npm_package_config_banner\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "config": {
+    "banner": "/* range-entity-row — https://github.com/W-Floyd/ha-range-entities-slider — built from src/, do not edit */"
+  },
+  "dependencies": {
+    "custom-card-helpers": "^2.0.0",
+    "home-assistant-js-websocket": "^9.6.0",
+    "lit": "^3.3.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.2"
+  }
+}

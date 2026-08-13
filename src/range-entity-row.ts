@@ -1,24 +1,37 @@
 /**
  * range-entity-row
  *
- * Displays two input_number entities as a dual-slider entity row.
- * Each slider is modeled exactly on hui-input-number-entity-row.
+ * Renders two input_number or number entities as one dual-handle range slider,
+ * modelled on Home Assistant's own hui-input-number-entity-row.
  *
  * Config (inside an entities card):
  *
  *   - type: custom:range-entity-row
- *     entity: input_number.lower_temp      # lower handle
+ *     entity: input_number.lower_temp       # lower handle
  *     range_entity: input_number.upper_temp # upper handle
- *     name: Temperature Range              # optional
- *     icon: mdi:thermometer                # optional
+ *     name: Temperature Range               # optional
+ *     icon: mdi:thermometer                 # optional
+ *     warn_inverted: false                  # optional
  */
-import { LitElement, html, css } from "https://unpkg.com/lit@2/index.js?module";
+import type { HomeAssistant } from "custom-card-helpers";
+import type { HassEntity } from "home-assistant-js-websocket";
+import { LitElement, html, css, nothing } from "lit";
+import type { PropertyValues, TemplateResult } from "lit";
+import { RANGE_SLIDER_STYLE_ID, thumbCss } from "./thumb-styles.js";
+import type {
+  GenericRowConfig,
+  Range,
+  RangeEntityRowConfig,
+  RangeSlider,
+} from "./types.js";
 
-// Single source of truth for the version; bumped by `just bump`.
-const VERSION = "0.1.0";
+/** Single source of truth for the version; bumped by `just bump`. */
+export const VERSION = "0.1.0";
 
-class RangeEntityRow extends LitElement {
-  static get properties() {
+const SUPPORTED_DOMAINS = ["input_number", "number"];
+
+export class RangeEntityRow extends LitElement {
+  static override get properties() {
     return {
       hass: {},
       config: {},
@@ -27,16 +40,21 @@ class RangeEntityRow extends LitElement {
     };
   }
 
-  constructor() {
-    super();
-    this._lowerVal = 0;
-    this._upperVal = 0;
-    this._interacting = false;
-  }
+  hass?: HomeAssistant;
+
+  config?: RangeEntityRowConfig;
+
+  private _lowerVal = 0;
+
+  private _upperVal = 0;
+
+  private _interacting = false;
+
+  private _warnedInverted?: string;
 
   // ── Config ──────────────────────────────────────────────────────────────────
 
-  setConfig(config) {
+  setConfig(config: RangeEntityRowConfig): void {
     if (!config.entity) {
       throw new Error('[range-entity-row] "entity" is required (lower handle)');
     }
@@ -50,9 +68,9 @@ class RangeEntityRow extends LitElement {
     for (const [key, entityId] of [
       ["entity", config.entity],
       ["range_entity", config.range_entity],
-    ]) {
-      const domain = entityId.split(".")[0];
-      if (domain !== "input_number" && domain !== "number") {
+    ] as const) {
+      const domain = entityId.split(".")[0] ?? "";
+      if (!SUPPORTED_DOMAINS.includes(domain)) {
         throw new Error(
           `[range-entity-row] "${key}" must be an input_number or number ` +
             `entity, got ${entityId}`,
@@ -64,7 +82,7 @@ class RangeEntityRow extends LitElement {
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-  updated(changedProps) {
+  override updated(changedProps: PropertyValues): void {
     if (changedProps.has("hass")) {
       const range = this._computeRange();
       if (!range) return;
@@ -85,9 +103,9 @@ class RangeEntityRow extends LitElement {
         if (this._warnedInverted !== pair) {
           this._warnedInverted = pair;
           console.warn(
-            `[range-entity-row] ${this.config.entity} (${range.lowerVal}) is above ` +
-              `${this.config.range_entity} (${range.upperVal}); showing them ` +
-              `low-to-high. A drag will write them back in order.`,
+            `[range-entity-row] ${this.config?.entity} (${range.lowerVal}) is ` +
+              `above ${this.config?.range_entity} (${range.upperVal}); showing ` +
+              `them low-to-high. A drag will write them back in order.`,
           );
         }
       } else {
@@ -95,46 +113,38 @@ class RangeEntityRow extends LitElement {
       }
     }
 
-    // Fix material-you theme compatibility for range sliders
-    // Run this on every update to ensure it stays applied
-    this._fixMaterialYouRangeSlider();
+    this._styleRangeSliderThumbs();
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   /** Entities the config names that Home Assistant does not know about. */
-  _missingEntities() {
+  private _missingEntities(): string[] {
     if (!this.hass || !this.config) return [];
     return [this.config.entity, this.config.range_entity].filter(
-      (entityId) => !this.hass.states[entityId],
+      (entityId) => !this.hass?.states[entityId],
     );
   }
 
   /** An entity whose state is not a number cannot drive a slider. */
-  _isNumeric(entityId) {
+  private _isNumeric(entityId: string): boolean {
     const state = this.hass?.states[entityId]?.state;
     return state !== undefined && Number.isFinite(parseFloat(state));
   }
 
-  _computeRange() {
+  private _computeRange(): Range | null {
     if (!this.hass || !this.config) return null;
     const lower = this.hass.states[this.config.entity];
     const upper = this.hass.states[this.config.range_entity];
     if (!lower || !upper) return null;
 
+    const attr = (stateObj: HassEntity, key: string, fallback: number) =>
+      parseFloat(String(stateObj.attributes[key] ?? fallback));
+
     return {
-      min: Math.min(
-        parseFloat(lower.attributes.min ?? 0),
-        parseFloat(upper.attributes.min ?? 0),
-      ),
-      max: Math.max(
-        parseFloat(lower.attributes.max ?? 100),
-        parseFloat(upper.attributes.max ?? 100),
-      ),
-      step: Math.min(
-        parseFloat(lower.attributes.step ?? 1),
-        parseFloat(upper.attributes.step ?? 1),
-      ),
+      min: Math.min(attr(lower, "min", 0), attr(upper, "min", 0)),
+      max: Math.max(attr(lower, "max", 100), attr(upper, "max", 100)),
+      step: Math.min(attr(lower, "step", 1), attr(upper, "step", 1)),
       lowerVal: parseFloat(lower.state),
       upperVal: parseFloat(upper.state),
       unit:
@@ -144,17 +154,18 @@ class RangeEntityRow extends LitElement {
     };
   }
 
-  _buildRowConfig() {
-    const cfg = { entity: this.config.entity };
-    if (this.config.name !== undefined) cfg.name = this.config.name;
-    if (this.config.icon !== undefined) cfg.icon = this.config.icon;
-    if (this.config.tap_action !== undefined)
-      cfg.tap_action = this.config.tap_action;
-    if (this.config.hold_action !== undefined)
-      cfg.hold_action = this.config.hold_action;
-    if (this.config.double_tap_action !== undefined)
-      cfg.double_tap_action = this.config.double_tap_action;
-    return cfg;
+  private _buildRowConfig(): GenericRowConfig {
+    const config = this.config!;
+    const rowConfig: GenericRowConfig = { entity: config.entity };
+    if (config.name !== undefined) rowConfig.name = config.name;
+    if (config.icon !== undefined) rowConfig.icon = config.icon;
+    if (config.tap_action !== undefined)
+      rowConfig.tap_action = config.tap_action;
+    if (config.hold_action !== undefined)
+      rowConfig.hold_action = config.hold_action;
+    if (config.double_tap_action !== undefined)
+      rowConfig.double_tap_action = config.double_tap_action;
+    return rowConfig;
   }
 
   // ── Value formatting ────────────────────────────────────────────────────────
@@ -164,7 +175,7 @@ class RangeEntityRow extends LitElement {
    * number format preference. Mirrors the frontend's own mapping so the readout
    * reads like the stock rows; null is HA's "none", meaning no localisation.
    */
-  _numberFormatLocale() {
+  private _numberFormatLocale(): string | string[] | undefined | null {
     const locale = this.hass?.locale;
     switch (locale?.number_format) {
       case "comma_decimal":
@@ -186,9 +197,9 @@ class RangeEntityRow extends LitElement {
    * Formats one entity's value the way its stock row would: decimal places from
    * that entity's own step, the user's locale number format, then its own unit.
    */
-  _formatValue(entityId, value) {
+  private _formatValue(entityId: string, value: number): string {
     const attributes = this.hass?.states[entityId]?.attributes ?? {};
-    const step = parseFloat(attributes.step);
+    const step = parseFloat(String(attributes.step));
     const decimals = Number.isFinite(step)
       ? (String(step).split(".")[1] ?? "").length
       : 0;
@@ -203,13 +214,13 @@ class RangeEntityRow extends LitElement {
           }).format(value);
 
     const unit = attributes.unit_of_measurement;
-    return `${number}${unit ? ` ${unit}` : ""}`;
+    return `${number}${unit ? ` ${unit}` : ""}`;
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  render() {
-    if (!this.hass || !this.config) return html``;
+  override render(): TemplateResult | typeof nothing {
+    if (!this.hass || !this.config) return nothing;
 
     // A row that renders nothing is indistinguishable from one that is not
     // there, so say what is wrong, as the stock rows do for the same case.
@@ -225,9 +236,9 @@ class RangeEntityRow extends LitElement {
     }
 
     const range = this._computeRange();
-    if (!range) return html``;
+    if (!range) return nothing;
 
-    // An unavailable entity keeps its row, with the slider disabled and the
+    // An unavailable entity keeps its row, with the slider disabled and its
     // state spelled out, rather than showing a handle at a value it does not
     // have.
     const unavailable = [this.config.entity, this.config.range_entity].filter(
@@ -244,11 +255,12 @@ class RangeEntityRow extends LitElement {
       !this._interacting &&
       range.lowerVal > range.upperVal &&
       this.config.warn_inverted !== false;
-    const readout = (entityId, value) => {
-      const stateObj = this.hass.states[entityId];
+
+    const readout = (entityId: string, value: number): string => {
       // An em dash, which is what the stock row shows for an entity with no
       // usable state.
       if (!this._isNumeric(entityId)) return "—";
+      const stateObj = this.hass!.states[entityId]!;
       // Alongside an unavailable partner the two are not a range, so each
       // entity shows its own state rather than a sorted pair.
       return this._formatValue(
@@ -256,6 +268,7 @@ class RangeEntityRow extends LitElement {
         unavailable.length ? parseFloat(stateObj.state) : value,
       );
     };
+
     const lower = readout(
       this.config.entity,
       inverted ? range.lowerVal : this._lowerVal,
@@ -268,13 +281,10 @@ class RangeEntityRow extends LitElement {
       ? `${this.config.entity} (${lower}) is above ` +
         `${this.config.range_entity} (${upper}). The slider shows them in ` +
         `order; dragging it writes them back in order.`
-      : undefined;
+      : "";
 
     return html`
-      <hui-generic-entity-row
-        .hass=${this.hass}
-        .config=${this._buildRowConfig()}
-      >
+      <hui-generic-entity-row .hass=${this.hass} .config=${this._buildRowConfig()}>
         <div class="flex">
           <ha-slider
             labeled
@@ -295,7 +305,7 @@ class RangeEntityRow extends LitElement {
                 icon="mdi:alert-circle"
                 title=${invertedTitle}
               ></ha-icon>`
-            : ""}
+            : nothing}
           <span class="state ${inverted ? "inverted-warning" : ""}"
             >${lower}<br />${upper}</span
           >
@@ -305,118 +315,11 @@ class RangeEntityRow extends LitElement {
   }
 
   /**
-   * Home Assistant does not paint handles on a range slider at all — with no
-   * styling of our own the handles show only as gaps in the track. What they
-   * should look like depends on the active theme, so pick per theme:
-   *
-   * - material-you: vertical bars, matching that theme's own slider handles.
-   * - everything else: a round knob, matching the stock input_number row.
+   * Home Assistant paints no handles on a range slider, so the card supplies
+   * them, in whichever shape suits the active theme. The styling goes into
+   * ha-slider's own shadow root, which is the only way to reach the handles.
    */
-  _rangeSliderThumbCss(materialYou) {
-    if (materialYou) {
-      return `
-        /* Apply same thumb styling to range slider thumbs */
-        :host([range]) #thumb-min,
-        :host([range]) #thumb-max {
-          overflow: visible;
-          background: var(--ha-slider-thumb-negative-color);
-          /* The stock thumb is a square-cornered rectangle in this colour: it
-             punches the gap through the track either side of the handle.
-             Rounding it here curves the gap inwards, which reads as the
-             neighbouring segments being cut concave. */
-          border-radius: 0;
-          transition:
-            width var(--md-sys-motion-expressive-spatial-default),
-            left var(--md-sys-motion-expressive-spatial-default);
-        }
-        :host([range]) #thumb-min::before,
-        :host([range]) #thumb-max::before {
-          content: '';
-          position: absolute;
-          height: var(--thumb-actual-height);
-          width: 4px;
-          top: calc(-0.5 * (var(--thumb-actual-height) - var(--ha-slider-track-size)));
-          left: 50%;
-          transform: translateX(-50%);
-          border-radius: var(--md-sys-shape-corner-full);
-          background: var(--md-sys-color-primary);
-        }
-        /* material-you-utilities styles a single #thumb and never the range
-           pair, so its treatment of the ends is mirrored here. It gives the
-           active track a 2px corner and a 6px gap where it meets the thumb,
-           plus an "inactive track inner corner shape" (#indicator::after) that
-           rounds the inactive side of the same gap. In range mode both ends of
-           the indicator meet a thumb, so each end needs all three. */
-        :host([range]) #indicator {
-          border-radius: 2px !important;
-          margin-inline: 6px !important;
-          box-shadow:
-            4px 0 0 var(--ha-slider-thumb-negative-color),
-            -4px 0 0 var(--ha-slider-thumb-negative-color) !important;
-        }
-        /* Dragging: the utilities narrow the handle and tighten the gap while a
-           value tooltip is open, keyed on #tooltip — which a range slider does
-           not have, since its tooltips are per handle. Same treatment, keyed on
-           the handle actually being dragged. */
-        :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #thumb-min,
-        :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #thumb-max {
-          scale: 0.66667 1;
-        }
-        :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #thumb-min::before,
-        :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #thumb-max::before {
-          scale: 0.75 1;
-        }
-        :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #indicator,
-        :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #indicator {
-          margin-inline: 4px !important;
-        }
-
-        /* With both handles on the same value the active track has no width,
-           so the gap and its corner shapes have nothing to sit against and
-           paint as stray slivers beside the handle. */
-        :host([range][collapsed]) #indicator {
-          margin-inline: 0 !important;
-        }
-        :host([range][collapsed]) #indicator::before,
-        :host([range][collapsed]) #indicator::after {
-          display: none !important;
-        }
-
-        /* The utilities' own ::after shapes the right-hand inner corner; this is
-           the same shape mirrored onto the left. */
-        :host([range]) #indicator::before {
-          content: '';
-          position: absolute;
-          inset-inline-start: -18px;
-          height: var(--ha-slider-track-size);
-          width: 6px;
-          border-radius: 2px;
-          box-shadow: 4px 0 0 3px var(--ha-slider-thumb-negative-color);
-          transition: inset-inline-start
-            var(--md-sys-motion-expressive-spatial-default);
-        }
-      `;
-    }
-
-    /* Match the knob on a stock input_number slider row. The thumb element is
-       already sized by Home Assistant exactly as the stock knob is, so painting
-       it directly — rather than drawing a shape over it — keeps the two in step
-       through upstream sizing changes and the slider's size variants.
-       --slider-color is what the stock knob and the indicator use. */
-    return `
-      :host([range]) #thumb-min,
-      :host([range]) #thumb-max {
-        background: var(--slider-color, var(--primary-color, #03a9f4));
-        border-radius: 50%;
-        /* Range thumbs carry a 1px white border that the stock knob does not.
-           With border-box sizing it eats into the same 16px, leaving a white
-           ring around a smaller dot. */
-        border: none;
-      }
-    `;
-  }
-
-  _fixMaterialYouRangeSlider() {
+  private _styleRangeSliderThumbs(): void {
     try {
       const slider = this.shadowRoot?.querySelector("ha-slider");
       if (!slider?.hasAttribute("range")) return;
@@ -432,25 +335,27 @@ class RangeEntityRow extends LitElement {
           .trim();
         const variant = materialYou ? "material-you" : "default";
 
-        const existing = sliderShadow.querySelector("#range-slider-fix");
-        if (existing?.dataset.variant === variant) return;
+        const existing = sliderShadow.querySelector<HTMLStyleElement>(
+          `#${RANGE_SLIDER_STYLE_ID}`,
+        );
+        if (existing?.dataset["variant"] === variant) return;
         existing?.remove();
 
         const style = document.createElement("style");
-        style.id = "range-slider-fix";
-        style.dataset.variant = variant;
-        style.textContent = this._rangeSliderThumbCss(materialYou);
+        style.id = RANGE_SLIDER_STYLE_ID;
+        style.dataset["variant"] = variant;
+        style.textContent = thumbCss(materialYou);
         sliderShadow.appendChild(style);
       }, 50);
-    } catch (e) {
-      console.debug("Could not style the range slider thumbs:", e);
+    } catch (error) {
+      console.debug("Could not style the range slider thumbs:", error);
     }
   }
 
   // ── Slider events ───────────────────────────────────────────────────────────
 
-  _onInput(ev) {
-    const slider = ev.target;
+  private _onInput(event: Event): void {
+    const slider = event.target as RangeSlider;
     const previousLower = this._lowerVal;
     const previousUpper = this._upperVal;
     let lower = slider.minValue;
@@ -459,7 +364,11 @@ class RangeEntityRow extends LitElement {
     // ha-slider pushes the stationary handle along when the dragged one reaches
     // it. Stop the dragged handle at the other instead: if both moved, the one
     // that did not lead the move gets pinned back where it was.
-    if (this._interacting && lower !== previousLower && upper !== previousUpper) {
+    if (
+      this._interacting &&
+      lower !== previousLower &&
+      upper !== previousUpper
+    ) {
       if (lower > previousLower) {
         lower = previousUpper;
         upper = previousUpper;
@@ -476,32 +385,34 @@ class RangeEntityRow extends LitElement {
     this._upperVal = upper;
   }
 
-  _onChange(ev) {
+  private _onChange(event: Event): void {
     this._interacting = false;
-    const lower = this.hass?.states[this.config.entity];
-    const upper = this.hass?.states[this.config.range_entity];
-    if (lower && ev.target.minValue !== parseFloat(lower.state)) {
-      this._callService(this.config.entity, ev.target.minValue);
+    const slider = event.target as RangeSlider;
+    const config = this.config!;
+    const lower = this.hass?.states[config.entity];
+    const upper = this.hass?.states[config.range_entity];
+    if (lower && slider.minValue !== parseFloat(lower.state)) {
+      this._callService(config.entity, slider.minValue);
     }
-    if (upper && ev.target.maxValue !== parseFloat(upper.state)) {
-      this._callService(this.config.range_entity, ev.target.maxValue);
+    if (upper && slider.maxValue !== parseFloat(upper.state)) {
+      this._callService(config.range_entity, slider.maxValue);
     }
   }
 
-  // ── HA service call ─────────────────────────────────────────────────────────
+  // ── Home Assistant service call ─────────────────────────────────────────────
 
-  _callService(entityId, value) {
+  private _callService(entityId: string, value: number): void {
     // min/max are merged across both entities so the slider can span the pair,
     // which means a handle can reach a value its own entity would reject.
-    const attributes = this.hass.states[entityId]?.attributes ?? {};
-    const min = parseFloat(attributes.min);
-    const max = parseFloat(attributes.max);
+    const attributes = this.hass?.states[entityId]?.attributes ?? {};
+    const min = parseFloat(String(attributes.min));
+    const max = parseFloat(String(attributes.max));
     let clamped = value;
     if (Number.isFinite(min)) clamped = Math.max(min, clamped);
     if (Number.isFinite(max)) clamped = Math.min(max, clamped);
 
     // input_number.set_value and number.set_value take the same arguments.
-    this.hass.callService(entityId.split(".")[0], "set_value", {
+    void this.hass?.callService(entityId.split(".")[0]!, "set_value", {
       entity_id: entityId,
       value: clamped,
     });
@@ -509,48 +420,46 @@ class RangeEntityRow extends LitElement {
 
   // ── Styles ──────────────────────────────────────────────────────────────────
 
-  static get styles() {
-    return css`
-      :host {
-        display: block;
-      }
-      .flex {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        flex-grow: 2;
-      }
-      .state {
-        min-width: 45px;
-        text-align: end;
-        /* Each value stays on its own line: the readout is already two lines,
-           and a theme with a wide font would otherwise wrap the unit onto a
-           third that the row height clips away. */
-        white-space: nowrap;
-      }
-      .inverted-warning {
-        color: var(--error-color, #db4437);
-      }
-      ha-icon.inverted-warning {
-        --mdc-icon-size: 20px;
-        margin-inline-end: 4px;
-        flex: none;
-      }
-      ha-slider {
-        width: 100%;
-        max-width: 200px;
-        /* The stock input_number row uses exactly this: the horizontal margin
-           leaves room for the thumb at min and max, so the card's overflow-x
-           does not clip it. */
-        margin: 1px var(--ha-space-2, 8px);
-      }
-      /* Override material-you styles for range sliders */
-      ha-slider::part(indicator) {
-        margin-inline-end: 0 !important;
-        box-shadow: none !important;
-      }
-    `;
-  }
+  static override styles = css`
+    :host {
+      display: block;
+    }
+    .flex {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-grow: 2;
+    }
+    .state {
+      min-width: 45px;
+      text-align: end;
+      /* Each value stays on its own line: the readout is already two lines, and
+         a theme with a wide font would otherwise wrap the unit onto a third
+         that the row height clips away. */
+      white-space: nowrap;
+    }
+    .inverted-warning {
+      color: var(--error-color, #db4437);
+    }
+    ha-icon.inverted-warning {
+      --mdc-icon-size: 20px;
+      margin-inline-end: 4px;
+      flex: none;
+    }
+    ha-slider {
+      width: 100%;
+      max-width: 200px;
+      /* The stock input_number row uses exactly this: the horizontal margin
+         leaves room for the thumb at min and max, so the card's overflow-x does
+         not clip it. */
+      margin: 1px var(--ha-space-2, 8px);
+    }
+    /* Override material-you styles for range sliders */
+    ha-slider::part(indicator) {
+      margin-inline-end: 0 !important;
+      box-shadow: none !important;
+    }
+  `;
 }
 
 customElements.define("range-entity-row", RangeEntityRow);
@@ -559,7 +468,8 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "range-entity-row",
   name: "Range Entity Row",
-  description: "Two input_number entities as a dual-slider entity row.",
+  description:
+    "Two input_number or number entities as a dual-handle range slider row.",
 });
 
 console.info(

@@ -70,7 +70,10 @@ HACS registers the dashboard resource for you. If it doesn't, add it manually as
 
 ### Manual
 
-1. Copy `ha-range-entities-slider.js` to `<config>/www/ha-range-entities-slider.js`.
+1. Download `ha-range-entities-slider.js` from the
+   [latest release](https://github.com/W-Floyd/ha-range-entities-slider/releases/latest) — the card
+   is built from `src/` rather than committed, so the release asset is the file to use — and put it
+   in `<config>/www/ha-range-entities-slider.js`.
 2. Add the resource under **Settings → Dashboards → ⋮ → Resources**:
 
    - URL: `/local/ha-range-entities-slider.js`
@@ -145,11 +148,6 @@ suppress that and have the row present the pair in order instead.
   widest range across the pair.
 - The card element registers as `range-entity-row`; the repository/file name is
   `ha-range-entities-slider` for historical reasons.
-- **Requires internet access on first load.** The module imports Lit from
-  `https://unpkg.com/lit@2/index.js?module` — the pattern used by the advanced example in the
-  [official custom card docs](https://developers.home-assistant.io/docs/frontend/custom-ui/custom-card/).
-  The browser caches it afterwards, but the row will fail to load if unpkg is unreachable when a
-  client first fetches it.
 - This is an entity **row**, not a standalone card. It must live inside a card that accepts rows,
   such as the Entities card.
 

@@ -40,6 +40,13 @@ OUT_DIR="${OUT_DIR:-$ROOT/tests/screenshots}"
 
 stamp_dir="${RENDER_CACHE:-$ROOT/tests/.render-cache}"
 
+# The card is built from src/ and not committed, so make sure it exists and is
+# no older than the source before anything is rendered against it.
+if [[ ! -f "$ROOT/ha-range-entities-slider.js" ]] ||
+  [[ -n "$(find "$ROOT/src" -newer "$ROOT/ha-range-entities-slider.js" -type f -print -quit 2>/dev/null)" ]]; then
+  "$ROOT/tools/build.sh"
+fi
+
 # Resolve the theme commits once and reuse that list for the fingerprint, the
 # install and the stamp. Resolving per consumer left a window in which a pack
 # could move between them, so the run would render one version and record
@@ -67,7 +74,12 @@ cdn_imports() {
       # Cannot tell which version would load: never claim a run is up to date.
       echo "${url} -> unresolved-$(date +%s)"
     fi
-  done < <(grep -oE 'https://[^"'"'"']+' "$ROOT/ha-range-entities-slider.js" | sort -u)
+    # Only import specifiers, not any URL that happens to appear in the file:
+    # the bundled Lit carries https://lit.dev/msg/ links in its warnings, and
+    # resolving those would make this depend on a documentation site.
+  done < <(grep -oE '(from|import)[[:space:]]*\(?["'"'"']https://[^"'"'"']+' \
+    "$ROOT/ha-range-entities-slider.js" |
+    grep -oE 'https://[^"'"'"']+' | sort -u)
 }
 
 # Everything that can change what the screenshots look like. The image is

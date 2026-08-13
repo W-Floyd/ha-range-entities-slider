@@ -45,6 +45,11 @@ jobs:
           name: release-screenshots-stable
           path: tests/screenshots
 
+      # The card is built rather than committed, so the asset has to be built
+      # here before it can be attached.
+      - name: Build the card
+        run: tools/build.sh
+
       # Release assets are a flat namespace, so the theme captures are prefixed
       # rather than relying on their directory to keep them distinct.
       - name: Collect the screenshots

@@ -3,6 +3,10 @@ tests/screenshots/
 
 node_modules/
 
+# Built from src/ by `just build`, and attached to releases rather than
+# committed — HACS resolves a plugin's filename from the release assets.
+ha-range-entities-slider.js
+
 # Cached theme tarballs, and the stamps recording what was last rendered.
 tests/.theme-cache/
 tests/.render-cache/

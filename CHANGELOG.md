@@ -89,6 +89,14 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ### Changed
 
+- The card is now TypeScript under `src/`, bundled with esbuild, with Lit
+  compiled in rather than fetched from unpkg at runtime — so it no longer
+  depends on a CDN being reachable, or on whatever `lit@2` happens to resolve to.
+  Home Assistant's types come from custom-card-helpers.
+- The built file is no longer committed. It is produced by `just build` and
+  attached to each release, which is where HACS resolves a plugin's filename
+  from; install manually by downloading it from the latest release.
+
 - The handles no longer push each other: dragging one up to the other stops it
   there, instead of shoving the other along to the end of the track.
 - An inverted pair (`range_entity` below `entity`) is now flagged rather than

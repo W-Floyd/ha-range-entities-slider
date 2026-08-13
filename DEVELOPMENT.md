@@ -1,10 +1,24 @@
 # Development
 
+The card is TypeScript under `src/`, bundled with [esbuild](https://esbuild.github.io/) into the
+single `ha-range-entities-slider.js` Home Assistant loads, with Lit compiled in rather than fetched
+from a CDN at runtime. Home Assistant's own types come from
+[custom-card-helpers](https://github.com/custom-cards/custom-card-helpers), as in the community
+[boilerplate-card](https://github.com/custom-cards/boilerplate-card).
+
+That built file is **not committed** — it is gitignored, built on demand, and attached to each
+release, which is where HACS resolves a plugin's `filename` from. `just build` produces it, and
+anything that needs it (`just check`, `just render`) builds it first.
+
+The build runs in a `node:24-alpine` container, so Docker remains the only thing this repository
+needs installed, the same as the render test. `LOCAL_NODE=1 just build` uses the host's node instead.
+
 Task running uses [just](https://github.com/casey/just); `just` on its own lists the recipes.
 
 | Recipe                 | What it does                                                                    |
 | ---------------------- | ------------------------------------------------------------------------------- |
-| `just check`           | Parses the card as an ES module, validates `hacs.json`, flags version/tag drift  |
+| `just build`           | Typechecks and bundles `src/` into the card                                      |
+| `just check`           | Builds, parses the card as an ES module, validates `hacs.json`, flags version drift |
 | `just render [ver]`    | Renders the card in a real Home Assistant and checks it (`stable` by default)    |
 | `just render-all`      | Renders against both Home Assistant `stable` and `beta`                          |
 | `just render-themes`   | Renders the row under the custom theme packs                                     |
@@ -126,8 +140,9 @@ as part of the change, in the same commit. `just bump` promotes that section to 
 today's date and **refuses to run when it is empty**, and `just release` uses that section as the
 GitHub release notes — so notes never come from raw commit subjects.
 
-The version lives in one place: the `VERSION` const in `ha-range-entities-slider.js`, which is also
-printed to the browser console when the card loads. Tags are derived from it as `vX.Y.Z`.
+The version lives in one place: the `VERSION` const in `src/range-entity-row.ts`, which is also
+printed to the browser console when the card loads. `just bump` rewrites it, rebuilds, and tags
+`vX.Y.Z`.
 
 ```bash
 # after editing the card and adding a CHANGELOG entry
