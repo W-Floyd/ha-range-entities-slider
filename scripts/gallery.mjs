@@ -33,31 +33,25 @@ const themes = png(`${dir}/themes`);
 const pick = (files, name) => (files.includes(name) ? name : null);
 const lines = [];
 
-const card = [
-  ["Light", pick(base, "card-stable-light.png")],
-  ["Dark", pick(base, "card-stable-dark.png")],
+// One capture per colour scheme, holding the custom row above the stock rows it
+// is modelled on, and the edge cases beside them.
+const overview = [
+  ["Light", base.find((f) => /^overview-.*-light\.png$/.test(f))],
+  ["Dark", base.find((f) => /^overview-.*-dark\.png$/.test(f))],
 ].filter(([, file]) => file);
 
-if (card.length) {
+if (overview.length) {
   lines.push("## Screenshots", "");
   lines.push(
-    "The row above the stock `input_number` slider rows it is modelled on:",
+    "The row above the stock `input_number` slider rows it is modelled on, then",
+    "the edge cases — both handles at the ends, an inverted pair flagged in the",
+    "error colour, the same pair with the warning off, equal values, and a",
+    "whole-number step:",
     "",
   );
-  for (const [label, file] of card) {
+  for (const [label, file] of overview) {
     lines.push(`**${label}**`, "", `![${label}](${url(file)})`, "");
   }
-}
-
-const edges = pick(base, "edge-cases-stable-light.png");
-if (edges) {
-  lines.push(
-    "Boundary and degenerate pairs — both handles at the ends, an inverted pair",
-    "flagged in the error colour, equal values, and a whole-number step:",
-    "",
-    `![Edge cases](${url(edges)})`,
-    "",
-  );
 }
 
 if (themes.length) {
@@ -90,6 +84,30 @@ if (themes.length) {
     lines.push(`**${label(file)}**`, "", `![${label(file)}](${url(`theme-${file}`)})`, "");
   }
   lines.push("</details>", "");
+
+  // Themes move independently of this card, so record what they were pinned to.
+  const versionsFile = `${dir}/theme-versions.txt`;
+  if (existsSync(versionsFile)) {
+    const versions = readFileSync(versionsFile, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [repo, commit] = line.split(" ");
+        return `- [${repo}](https://github.com/${repo}/tree/${commit}) \`${commit.slice(0, 7)}\``;
+      });
+    if (versions.length) {
+      lines.push(
+        "<details>",
+        `<summary>Theme versions these were captured against (${versions.length})</summary>`,
+        "",
+        ...versions,
+        "",
+        "</details>",
+        "",
+      );
+    }
+  }
 }
 
 if (!lines.length) {

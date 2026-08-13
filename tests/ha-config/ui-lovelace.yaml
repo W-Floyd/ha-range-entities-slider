@@ -2,8 +2,10 @@ title: Render Test
 views:
   - title: Card
     cards:
-      # The custom row sits directly above the stock input_number slider rows it
-      # is modeled on, so the screenshots double as a side-by-side comparison.
+      # A single list: the custom row sits directly above the stock
+      # input_number slider rows it is modelled on, so the screenshots double as
+      # a side-by-side comparison, with the boundary and degenerate pairs below.
+      # Each row below is asserted by tests/render.mjs.
       - type: entities
         title: Range Entity Row
         entities:
@@ -17,11 +19,8 @@ views:
           - entity: input_number.upper_temp
             name: Upper Temp (stock row)
 
-      # Boundary and degenerate pairs. Each is asserted by tests/render.mjs and
-      # captured in the screenshots.
-      - type: entities
-        title: Edge cases
-        entities:
+          - type: section
+            label: Edge cases
           - type: custom:range-entity-row
             entity: input_number.span_low
             range_entity: input_number.span_high
@@ -33,7 +32,7 @@ views:
           - type: custom:range-entity-row
             entity: input_number.inverted_low
             range_entity: input_number.inverted_high
-            name: Inverted (warning disabled)
+            name: Inverted (warning off)
             warn_inverted: false
           - type: custom:range-entity-row
             entity: input_number.equal_low

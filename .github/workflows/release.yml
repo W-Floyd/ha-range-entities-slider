@@ -1,12 +1,15 @@
 name: Release
 
-# Renders the card against a real Home Assistant when a version tag is pushed,
-# attaches the screenshots to the release, and rewrites the release notes as the
-# changelog entry for that version plus a gallery of those screenshots.
+# On a version tag: render the card against a real Home Assistant, attach the
+# screenshots to the release, and rewrite the release notes as the changelog
+# entry for that version plus a gallery of those screenshots.
 #
-# They are attached as release assets rather than workflow artifacts on purpose:
-# artifacts expire (90 days by default), release assets do not, and their URLs
-# are deterministic, so the notes can link them.
+# The rendering is not repeated here — it calls the Render workflow, which is
+# also what runs on pushes and weekly.
+#
+# Screenshots go on as release assets rather than workflow artifacts: artifacts
+# expire (90 days by default), release assets do not, and their URLs are
+# deterministic, so the notes can link them.
 
 on:
   push:
@@ -21,7 +24,15 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  render:
+    uses: ./.github/workflows/render.yml
+    with:
+      ha_versions: '["stable"]'
+      sweep: true
+      artifact_prefix: release-screenshots
+
+  publish:
+    needs: render
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,17 +40,10 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
-      - name: Cache theme downloads
-        uses: actions/cache@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: tests/.theme-cache
-          key: themes-${{ hashFiles('tests/install-themes.sh') }}
-
-      - name: Render the card and the theme sweep
-        env:
-          SWEEP_THEMES: "1"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: tests/render.sh stable
+          name: release-screenshots-stable
+          path: tests/screenshots
 
       # Release assets are a flat namespace, so the theme captures are prefixed
       # rather than relying on their directory to keep them distinct.

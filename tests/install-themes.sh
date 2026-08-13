@@ -1,27 +1,29 @@
 #!/usr/bin/env bash
 #
 # Downloads the custom themes the render sweep checks against into a Home
-# Assistant config dir: themes/*.yaml, plus material-you-utilities' frontend
-# module, which the Material You theme needs for its dynamic colours.
+# Assistant config dir: themes/*.yaml, plus the frontend modules some of them
+# need — card-mod, which several packs put their styling behind, and
+# material-you-utilities, which the Material You theme uses for its colours.
 #
 # Usage: tests/install-themes.sh <config_dir>
+#        tests/install-themes.sh --versions
 #
-# Tarballs come from the GitHub API so no branch names are hardcoded — each repo
-# resolves to its own default branch — and are cached, since the sweep is run
-# repeatedly and unauthenticated GitHub allows only 60 requests an hour.
+# Each pack is pinned to whatever its default branch currently points at,
+# resolved with `git ls-remote`, which has no API rate limit. Tarballs are cached
+# under that commit, so an upstream change fetches a new file instead of ageing
+# one out, and an unchanged pack is never downloaded twice. `--versions` prints
+# those commits: the render fingerprint and the CI cache key are built from them,
+# so a theme release invalidates both.
 #
 # Env:
 #   THEME_CACHE=<dir>   where tarballs are kept (default tests/.theme-cache)
-#   THEME_CACHE_TTL=<s> re-download anything older than this (default 604800, a week)
 #   REFRESH_THEMES=1    ignore the cache and re-download everything
 #   GITHUB_TOKEN=<tok>  raises the API rate limit; CI sets this automatically
 #
 set -euo pipefail
 
-target="${1:?usage: install-themes.sh <config_dir>}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cache="${THEME_CACHE:-$ROOT/tests/.theme-cache}"
-ttl="${THEME_CACHE_TTL:-604800}"
 
 # repo | extra file to drop into www/ (optional)
 #
@@ -39,6 +41,19 @@ THEMES=(
   "JuanMTech/macOS-Theme|"
 )
 
+resolve() {
+  git ls-remote "https://github.com/$1" HEAD 2>/dev/null | cut -f1 | head -1
+}
+
+if [[ "${1:-}" == "--versions" ]]; then
+  for entry in "${THEMES[@]}"; do
+    repo="${entry%%|*}"
+    echo "${repo} $(resolve "$repo")"
+  done
+  exit 0
+fi
+
+target="${1:?usage: install-themes.sh <config_dir> | --versions}"
 mkdir -p "$target/themes" "$target/www" "$cache"
 
 auth=()
@@ -47,39 +62,50 @@ if [[ -n "${GITHUB_TOKEN:-}" ]]; then
 fi
 
 failed=0
+: >"$target/theme-versions.txt"
 
 for entry in "${THEMES[@]}"; do
   repo="${entry%%|*}"
   extra="${entry##*|}"
-  tarball="${cache}/${repo//\//-}.tar.gz"
+  slug="${repo//\//-}"
 
-  fresh=0
-  if [[ "${REFRESH_THEMES:-0}" != "1" && -s "$tarball" ]]; then
-    age=$(( $(date +%s) - $(stat -f %m "$tarball" 2>/dev/null || stat -c %Y "$tarball") ))
-    [[ "$age" -lt "$ttl" ]] && fresh=1
+  commit="$(resolve "$repo")"
+  if [[ -z "$commit" ]]; then
+    # Cannot tell which version is current: fall back to whatever is cached
+    # rather than failing the run, but say so.
+    cached="$(ls -t "${cache}/${slug}-"*.tar.gz 2>/dev/null | head -1)"
+    commit="$(basename "${cached:-}" .tar.gz)"
+    commit="${commit#"${slug}-"}"
+    if [[ -z "$commit" ]]; then
+      echo "==> ${repo}: cannot resolve a version and nothing cached" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+    echo "==> ${repo}: cannot resolve a version; using cached ${commit:0:7}" >&2
   fi
 
-  if [[ "$fresh" == "1" ]]; then
-    echo "==> ${repo} (cached)"
+  echo "${repo} ${commit}" >>"$target/theme-versions.txt"
+  tarball="${cache}/${slug}-${commit}.tar.gz"
+
+  if [[ "${REFRESH_THEMES:-0}" != "1" && -s "$tarball" ]]; then
+    echo "==> ${repo} ${commit:0:7} (cached)"
   else
-    echo "==> ${repo} (downloading)"
+    echo "==> ${repo} ${commit:0:7} (downloading)"
     # Download to a temp file first so an interrupted fetch cannot poison the
     # cache with a truncated tarball.
     # ${auth[@]+...} keeps `set -u` happy when no token is set: bash 3.2 treats
     # an empty array expansion as unbound.
     if ! curl -fsSL ${auth[@]+"${auth[@]}"} \
-      "https://api.github.com/repos/${repo}/tarball" -o "${tarball}.part"; then
+      "https://api.github.com/repos/${repo}/tarball/${commit}" -o "${tarball}.part"; then
       rm -f "${tarball}.part"
-      if [[ -s "$tarball" ]]; then
-        echo "    download failed; using the stale cached copy" >&2
-      else
-        echo "    download failed and nothing cached" >&2
-        failed=$((failed + 1))
-        continue
-      fi
-    else
-      mv "${tarball}.part" "$tarball"
+      echo "    download failed" >&2
+      failed=$((failed + 1))
+      continue
     fi
+    mv "${tarball}.part" "$tarball"
+    # Only the current commit is worth keeping.
+    find "$cache" -maxdepth 1 -name "${slug}-*.tar.gz" \
+      ! -name "$(basename "$tarball")" -delete
   fi
 
   tmp="$(mktemp -d)"

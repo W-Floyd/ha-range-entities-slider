@@ -15,8 +15,19 @@
 #   STRICT_THUMBS=0 warn instead of fail if the Material You patch stops applying
 #   SWEEP_THEMES=1  also install the custom themes and screenshot the row in each
 #   STRICT_THEMES=0 warn instead of fail if a theme leaves the handle unpainted
+#   FORCE_RENDER=1  render even when nothing has changed since the last run
+#
+# Pass --fingerprint to print the identity of this run (the card, the tests, the
+# sweep settings, and the remote digest of the Home Assistant image) and exit.
+# A run whose fingerprint matches the last successful one is skipped.
 #
 set -euo pipefail
+
+fingerprint_only=0
+if [[ "${1:-}" == "--fingerprint" ]]; then
+  fingerprint_only=1
+  shift
+fi
 
 HA_VERSION="${1:-stable}"
 HA_IMAGE="ghcr.io/home-assistant/home-assistant:${HA_VERSION}"
@@ -26,6 +37,50 @@ NETWORK="range-entity-row-render"
 PORT="${HA_PORT:-8124}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${OUT_DIR:-$ROOT/tests/screenshots}"
+
+stamp_dir="${RENDER_CACHE:-$ROOT/tests/.render-cache}"
+
+# Everything that can change what the screenshots look like. The image is
+# identified by its remote digest, so a new :stable release invalidates this
+# without anything being pulled.
+fingerprint() {
+  local digest
+  digest="$(docker manifest inspect "$HA_IMAGE" 2>/dev/null | shasum -a 256 | cut -d" " -f1)"
+  if [[ -z "$digest" ]]; then
+    # Unknown image identity: never claim a run is up to date.
+    echo "unknown-$(date +%s)"
+    return
+  fi
+  {
+    echo "$digest"
+    echo "sweep=${SWEEP_THEMES:-0} all=${ALL_THEMES:-0} filter=${THEME_FILTER:-}"
+    # A theme release changes what the sweep captures, so it has to invalidate
+    # the render as surely as a change to the card does.
+    if [[ "${SWEEP_THEMES:-0}" == "1" ]]; then
+      "$ROOT/tests/install-themes.sh" --versions
+    fi
+    echo "strict=${STRICT_THUMBS:-1}/${STRICT_THEMES:-1}"
+    find "$ROOT/ha-range-entities-slider.js" "$ROOT/tests" -type f \
+      -not -path "*/screenshots/*" -not -path "*/.theme-cache/*" \
+      -not -path "*/.render-cache/*" -print0 |
+      sort -z | xargs -0 shasum -a 256
+  } | shasum -a 256 | cut -d" " -f1
+}
+
+print=$(fingerprint)
+if [[ "$fingerprint_only" == "1" ]]; then
+  echo "$print"
+  exit 0
+fi
+
+stamp="${stamp_dir}/${print}"
+if [[ "${FORCE_RENDER:-0}" != "1" && -f "$stamp" ]] &&
+  compgen -G "$OUT_DIR/*.png" >/dev/null; then
+  echo "==> nothing changed since the last run; skipping"
+  cat "$stamp"
+  echo "    (FORCE_RENDER=1 to render anyway)"
+  exit 0
+fi
 
 workdir="$(mktemp -d)"
 cleanup() {
@@ -50,6 +105,9 @@ cp "$ROOT/ha-range-entities-slider.js" "$workdir/www/"
 
 if [[ "${SWEEP_THEMES:-0}" == "1" ]]; then
   "$ROOT/tests/install-themes.sh" "$workdir"
+  # Keep the resolved theme commits beside the screenshots they produced.
+  mkdir -p "$OUT_DIR"
+  cp "$workdir/theme-versions.txt" "$OUT_DIR/theme-versions.txt"
   # card-mod goes first: themes that use card-mod-theme keys need it loaded
   # before their styles can apply.
   for module in card-mod.js material-you-utilities.min.js; do
@@ -96,6 +154,13 @@ docker run --rm \
 if [[ "$status" != "0" ]]; then
   echo "==> render failed; last Home Assistant log lines:" >&2
   docker logs --tail 40 "$CONTAINER" >&2 || true
+  exit "$status"
 fi
+
+# Record what this fingerprint was rendered against, including the version the
+# instance actually reported rather than just the tag that was asked for.
+mkdir -p "$stamp_dir"
+version="$(node -e 'try{process.stdout.write(require(process.argv[1]).haVersion)}catch{process.stdout.write("unknown")}' "$OUT_DIR/render-info.json" 2>/dev/null || echo unknown)"
+printf -- '    rendered against Home Assistant %s (tag: %s)\n' "$version" "$HA_VERSION" >"$stamp"
 
 exit "$status"

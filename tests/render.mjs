@@ -291,6 +291,36 @@ const HANDLE_PROBE = (el) => {
   };
 };
 
+/**
+ * Captures the dashboard the same way everywhere: clipped to the cards plus a
+ * margin, since the view element runs the full height of the viewport and would
+ * otherwise leave most of the image empty.
+ */
+async function captureOverview(page, file) {
+  const cards = await page.locator("hui-entities-card").evaluateAll((nodes) =>
+    nodes.map((n) => {
+      const r = n.getBoundingClientRect();
+      return { x: r.x, y: r.y, right: r.right, bottom: r.bottom };
+    }),
+  );
+  const pad = 12;
+  const clip = cards.length
+    ? {
+        x: Math.max(0, Math.min(...cards.map((c) => c.x)) - pad),
+        y: Math.max(0, Math.min(...cards.map((c) => c.y)) - pad),
+        width:
+          Math.max(...cards.map((c) => c.right)) -
+          Math.min(...cards.map((c) => c.x)) +
+          pad * 2,
+        height:
+          Math.max(...cards.map((c) => c.bottom)) -
+          Math.min(...cards.map((c) => c.y)) +
+          pad * 2,
+      }
+    : undefined;
+  await page.screenshot({ path: file, clip });
+}
+
 const failures = [];
 const warnings = [];
 
@@ -305,7 +335,21 @@ await waitForHomeAssistant();
 const token = process.env.HA_TOKEN || (await onboard());
 console.log("==> onboarded");
 
+// The tag says "stable"; this says which release that resolved to, which is
+// what the skip-if-unchanged check and the release notes actually care about.
+const config = await (
+  await fetch(`${HA_URL}/api/config`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+).json();
+const haVersion = config?.version ?? "unknown";
+console.log(`==> Home Assistant ${haVersion} (tag: ${HA_VERSION})`);
+
 mkdirSync(OUT_DIR, { recursive: true });
+writeFileSync(
+  `${OUT_DIR}/render-info.json`,
+  `${JSON.stringify({ haVersion, haTag: HA_VERSION }, null, 2)}\n`,
+);
 
 const browser = await chromium.launch();
 
@@ -589,7 +633,7 @@ try {
       );
 
       // warn_inverted: false opts out: no icon, values presented in order.
-      const quiet = byName["Inverted (warning disabled)"];
+      const quiet = byName["Inverted (warning off)"];
       expect(
         quiet?.warningIcon === null,
         `warn_inverted: false hides the icon (${quiet?.warningIcon})`,
@@ -715,16 +759,12 @@ try {
       }
     }
 
-    for (const [name, locator] of [
-      ["row", row],
-      ["stock-row", stockRow],
-      ["card", page.locator("hui-entities-card").first()],
-      ["edge-cases", page.locator("hui-entities-card").nth(1)],
-    ]) {
-      const file = `${OUT_DIR}/${name}-${HA_VERSION}-${colorScheme}.png`;
-      await locator.screenshot({ path: file });
-      console.log(`saved ${file}`);
-    }
+    // One capture per colour scheme covering everything the dashboard holds:
+    // the custom row above the stock rows it is modelled on, and the edge cases
+    // beside them. Four separate element shots said the same thing in pieces.
+    const overview = `${OUT_DIR}/overview-${HA_VERSION}-${colorScheme}.png`;
+    await captureOverview(page, overview);
+    console.log(`saved ${overview}`);
 
     await context.close();
   }
@@ -866,10 +906,7 @@ try {
           file: `${slug}${suffix}.png`,
           ...handles,
         });
-        await page
-          .locator("hui-entities-card")
-          .first()
-          .screenshot({ path: `${themeDir}/${slug}${suffix}.png` });
+        await captureOverview(page, `${themeDir}/${slug}${suffix}.png`);
 
         if (process.env.DIAGNOSE_ZOOM === "1") {
           // A dedicated high-DPI context, so the crops are big enough to judge

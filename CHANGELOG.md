@@ -33,6 +33,17 @@ promotes that section to the new version and refuses to run if it is empty.
   row under a curated selection, failing if the range handle is left unpainted
   under any of them. Runs weekly in CI.
 
+- A render is skipped when nothing that affects it has changed — the card, the
+  tests, the settings, the remote digest of the Home Assistant image, and the
+  commits the theme packs point at — restoring the previous screenshots instead.
+  CI keys its caches on the same fingerprint, and the version the instance
+  actually reported is recorded beside the screenshots.
+- Theme packs are pinned to the commit their default branch points at and cached
+  under it, so an upstream theme release invalidates both the download and the
+  render, and the release notes list what the captures were taken against.
+- One screenshot per colour scheme of a single list holding the custom row, the
+  stock rows and the edge cases, replacing four separate element captures. The
+  theme sweep frames its captures the same way.
 - Release workflow: pushing a `v*` tag renders the card and the theme sweep,
   attaches the screenshots to the release, and rewrites its notes as the
   changelog entry plus a gallery of those captures. They are release assets, not

@@ -150,9 +150,15 @@ root. That last one matters most: the patch targets private ids (`#thumb-min`, `
 `#indicator`) that upstream can rename at any time, which is why
 [the workflow](.github/workflows/render.yml) runs it weekly against `stable` and `beta`.
 
-Screenshots land in `tests/screenshots/` (gitignored, uploaded as CI artifacts) in light and dark,
-and the test dashboard places the custom row directly above stock `input_number` slider rows for the
-same entities, so each capture doubles as a side-by-side comparison.
+Screenshots land in `tests/screenshots/` (gitignored, uploaded as CI artifacts) — one capture per
+colour scheme, of a single list holding the custom row, the stock `input_number` slider rows for the
+same entities, and the edge cases. So each capture doubles as a side-by-side comparison, and the
+theme sweep frames its captures identically.
+
+A run is skipped when nothing that affects it has changed: the card, the tests, the settings, the
+remote digest of the Home Assistant image, and (when sweeping) the commits the theme packs currently
+point at. `FORCE_RENDER=1` renders anyway. The version the instance actually reported is recorded in
+`render-info.json` beside the screenshots, and the resolved theme commits in `theme-versions.txt`.
 
 ```bash
 just render              # Home Assistant stable
@@ -195,9 +201,10 @@ THEME_FILTER="Graphite,Catppuccin" just render-themes   # substring match
 REFRESH_THEMES=1 just render-themes                     # ignore the download cache
 ```
 
-Theme tarballs are cached in `tests/.theme-cache` (gitignored, refreshed weekly) so repeated runs do
-not re-download them — unauthenticated GitHub allows only 60 API requests an hour. Set `GITHUB_TOKEN`
-to raise that; CI passes one automatically.
+Theme tarballs are cached in `tests/.theme-cache` (gitignored) under the commit each pack currently
+points at, resolved with `git ls-remote`, so an upstream release fetches a new file and an unchanged
+pack is never downloaded twice. `REFRESH_THEMES=1` ignores the cache; `GITHUB_TOKEN` raises the API
+rate limit, and CI passes one automatically.
 
 It checks that the range handle gets a painted body under every theme swept, and fails if one does
 not (`STRICT_THEMES=0` downgrades that to a warning). This is what caught the handles rendering as a
