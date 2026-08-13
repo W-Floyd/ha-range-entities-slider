@@ -215,6 +215,9 @@ const HANDLE_PROBE = (el) => {
   const indicatorRadius = indicator
     ? getComputedStyle(indicator).borderRadius
     : null;
+  const indicatorMargin = indicator
+    ? `${getComputedStyle(indicator).marginInlineStart} ${getComputedStyle(indicator).marginInlineEnd}`
+    : null;
 
   const withFix = measure();
 
@@ -228,7 +231,14 @@ const HANDLE_PROBE = (el) => {
     sliderShadow.appendChild(patch);
   }
 
-  return { thumb: true, fix: !!patch, indicatorRadius, ...withFix, withoutFix };
+  return {
+    thumb: true,
+    fix: !!patch,
+    indicatorRadius,
+    indicatorMargin,
+    ...withFix,
+    withoutFix,
+  };
 };
 
 const failures = [];
@@ -755,6 +765,83 @@ try {
           .first()
           .screenshot({ path: `${themeDir}/${slug}-${colorScheme}.png` });
 
+        if (process.env.DIAGNOSE_ZOOM === "1") {
+          // A dedicated high-DPI context, so the crops are big enough to judge
+          // corner radii rather than anti-aliasing.
+          const zoomContext = await browser.newContext({
+            viewport: { width: 1400, height: 800 },
+            colorScheme,
+            deviceScaleFactor: 8,
+          });
+          await zoomContext.addInitScript(
+            ({ url, value }) => {
+              window.localStorage.setItem(
+                "hassTokens",
+                JSON.stringify({
+                  access_token: value,
+                  token_type: "Bearer",
+                  expires_in: 1800,
+                  hassUrl: url,
+                  clientId: `${url}/`,
+                  expires: Date.now() + 1800 * 1000,
+                  refresh_token: "",
+                }),
+              );
+            },
+            { url: HA_URL, value: token },
+          );
+          const zoomPage = await zoomContext.newPage();
+          await zoomPage.goto(`${HA_URL}/lovelace/0`, {
+            waitUntil: "domcontentloaded",
+          });
+          await zoomPage.locator("range-entity-row").first().waitFor({
+            state: "attached",
+            timeout: 30_000,
+          });
+          await zoomPage.waitForTimeout(1000);
+
+          const BOX_OF = (el, selector) => {
+            const node = el.shadowRoot
+              ?.querySelector("ha-slider")
+              ?.shadowRoot?.querySelector(selector);
+            if (!node) return null;
+            const r = node.getBoundingClientRect();
+            return {
+              x: r.x + r.width / 2 - 20,
+              y: r.y + r.height / 2 - 10,
+              width: 40,
+              height: 20,
+            };
+          };
+          const zoomRow = zoomPage.locator("range-entity-row").first();
+          const zoomStock = zoomPage
+            .locator("hui-input-number-entity-row")
+            .first();
+          const boxes = {
+            "ours-min": await zoomRow.evaluate(
+              (el, src) => eval(src)(el, "#thumb-min"),
+              BOX_OF.toString(),
+            ),
+            "ours-max": await zoomRow.evaluate(
+              (el, src) => eval(src)(el, "#thumb-max"),
+              BOX_OF.toString(),
+            ),
+            stock: await zoomStock.evaluate(
+              (el, src) => eval(src)(el, "#thumb"),
+              BOX_OF.toString(),
+            ),
+          };
+          for (const [label, clip] of Object.entries(boxes)) {
+            if (!clip) continue;
+            await zoomPage.screenshot({
+              path: `${themeDir}/zoom-${label}-${colorScheme}.png`,
+              clip,
+            });
+          }
+
+          await zoomContext.close();
+        }
+
         // Optional side-by-side: what the row looks like with the card's whole
         // shadow-DOM patch detached, i.e. Home Assistant's own range slider.
         if (process.env.DIAGNOSE_PATCH === "1") {
@@ -794,6 +881,11 @@ try {
       expect(
         result.indicatorRadius === "2px",
         `material-you indicator is rounded against both handles in ${result.colorScheme} (${result.indicatorRadius})`,
+      );
+      // Without the gap the thumb's negative rect covers that rounded end.
+      expect(
+        result.indicatorMargin === "6px 6px",
+        `material-you indicator keeps a gap beside both handles in ${result.colorScheme} (${result.indicatorMargin})`,
       );
     }
 

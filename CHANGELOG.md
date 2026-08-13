@@ -44,9 +44,13 @@ promotes that section to the new version and refuses to run if it is empty.
   its own, so the track ran into the value readout and sat out of line with the
   rows around it. Home Assistant uses that margin to keep the thumb at min and
   max from being clipped by the card's `overflow-x`.
-- Under material-you the range indicator ended square against the handles. The
-  base component rounds its thumb-facing end 2px, which in range mode applies to
-  both ends.
+- Under material-you both sides of each handle ended square against it.
+  material-you-utilities styles only the single `#thumb`, never the range pair,
+  so its treatment of that junction is now mirrored for both ends of the range
+  indicator: the 2px active-track corner, the 6px gap, and the
+  "inactive track inner corner shape" (`#indicator::after`) that rounds the
+  inactive side. The card had been hiding that shape outright, which is why one
+  side stayed square.
 
 - Range handles were invisible under every theme except material-you, showing
   only as a gap in the track. The handle styling was material-you's — bars drawn

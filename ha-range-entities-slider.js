@@ -275,17 +275,31 @@ class RangeEntityRow extends LitElement {
           border-radius: var(--md-sys-shape-corner-full);
           background: var(--md-sys-color-primary);
         }
-        :host([range]) #indicator::after {
-          display: none !important;
-        }
+        /* material-you-utilities styles a single #thumb and never the range
+           pair, so its treatment of the ends is mirrored here. It gives the
+           active track a 2px corner and a 6px gap where it meets the thumb,
+           plus an "inactive track inner corner shape" (#indicator::after) that
+           rounds the inactive side of the same gap. In range mode both ends of
+           the indicator meet a thumb, so each end needs all three. */
         :host([range]) #indicator {
-          margin-inline-end: 0 !important;
-          box-shadow: none !important;
-          /* The base component rounds the indicator 8px on its outer end and
-             2px on the end that faces the thumb. In range mode both ends face a
-             thumb, so both take the 2px, instead of a square edge against the
-             handle. */
           border-radius: 2px !important;
+          margin-inline: 6px !important;
+          box-shadow:
+            4px 0 0 var(--ha-slider-thumb-negative-color),
+            -4px 0 0 var(--ha-slider-thumb-negative-color) !important;
+        }
+        /* The utilities' own ::after shapes the right-hand inner corner; this is
+           the same shape mirrored onto the left. */
+        :host([range]) #indicator::before {
+          content: '';
+          position: absolute;
+          inset-inline-start: -18px;
+          height: var(--ha-slider-track-size);
+          width: 6px;
+          border-radius: 2px;
+          box-shadow: 4px 0 0 3px var(--ha-slider-thumb-negative-color);
+          transition: inset-inline-start
+            var(--md-sys-motion-expressive-spatial-default);
         }
       `;
     }
