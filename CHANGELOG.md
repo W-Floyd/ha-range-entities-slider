@@ -34,12 +34,12 @@ promotes that section to the new version and refuses to run if it is empty.
   under any of them. Runs weekly in CI.
 
 - A render is skipped when nothing that affects it has changed — the card, the
-  tests, the settings, the remote digest of the Home Assistant image, and the
-  commits the theme packs point at — restoring the previous screenshots instead.
-  CI keys its caches on the same fingerprint, and the version the instance
-  actually reported is recorded beside the screenshots. The weekly run ignores
-  it and always renders: the card loads Lit from unpkg at runtime, which floats
-  across 2.x and so is outside anything the fingerprint can cover.
+  tests, the settings, the remote digest of the Home Assistant image, what the
+  card's floating CDN imports resolve to, and the commits the theme packs point
+  at — restoring the previous screenshots instead. CI keys its caches on the same
+  fingerprint, and what the run was rendered against, down to the Home Assistant
+  version the instance reported and the exact Lit build, is recorded beside the
+  screenshots.
 - Theme packs are pinned to the commit their default branch points at and cached
   under it, so an upstream theme release invalidates both the download and the
   render, and the release notes list what the captures were taken against.

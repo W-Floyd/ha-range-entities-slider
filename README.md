@@ -156,9 +156,9 @@ same entities, and the edge cases. So each capture doubles as a side-by-side com
 theme sweep frames its captures identically.
 
 A run is skipped when nothing that affects it has changed: the card, the tests, the settings, the
-remote digest of the Home Assistant image, and (when sweeping) the commits the theme packs currently
-point at. `FORCE_RENDER=1` renders anyway — which is what the weekly CI run does, since the card
-loads Lit from unpkg at runtime and that floats across 2.x, outside anything the fingerprint covers. The version the instance actually reported is recorded in
+remote digest of the Home Assistant image, whatever the card's runtime imports currently resolve to
+(`lit@2` follows the unpkg redirect to `lit@2.8.0`, so a Lit release counts as a change), and when
+sweeping, the commits the theme packs point at. `FORCE_RENDER=1` renders regardless. The version the instance actually reported is recorded in
 `render-info.json` beside the screenshots, and the resolved theme commits in `theme-versions.txt`.
 
 ```bash

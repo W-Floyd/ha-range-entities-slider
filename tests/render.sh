@@ -40,6 +40,23 @@ OUT_DIR="${OUT_DIR:-$ROOT/tests/screenshots}"
 
 stamp_dir="${RENDER_CACHE:-$ROOT/tests/.render-cache}"
 
+# What the card's runtime imports currently resolve to. It loads Lit from unpkg
+# with a floating major (lit@2 -> lit@2.8.0 today), so a Lit release changes what
+# the browser executes without a byte of this repo changing. Resolving the
+# redirect makes that visible to the fingerprint.
+cdn_imports() {
+  local url effective
+  while read -r url; do
+    if effective="$(curl -sIL --max-time 20 -o /dev/null -w '%{url_effective}' "$url")" &&
+      [[ -n "$effective" ]]; then
+      echo "${url} -> ${effective}"
+    else
+      # Cannot tell which version would load: never claim a run is up to date.
+      echo "${url} -> unresolved-$(date +%s)"
+    fi
+  done < <(grep -oE 'https://[^"'"'"']+' "$ROOT/ha-range-entities-slider.js" | sort -u)
+}
+
 # Everything that can change what the screenshots look like. The image is
 # identified by its remote digest, so a new :stable release invalidates this
 # without anything being pulled.
@@ -53,6 +70,7 @@ fingerprint() {
   fi
   {
     echo "$digest"
+    cdn_imports
     echo "sweep=${SWEEP_THEMES:-0} all=${ALL_THEMES:-0} filter=${THEME_FILTER:-}"
     # A theme release changes what the sweep captures, so it has to invalidate
     # the render as surely as a change to the card does.
@@ -161,6 +179,9 @@ fi
 # instance actually reported rather than just the tag that was asked for.
 mkdir -p "$stamp_dir"
 version="$(node -e 'try{process.stdout.write(require(process.argv[1]).haVersion)}catch{process.stdout.write("unknown")}' "$OUT_DIR/render-info.json" 2>/dev/null || echo unknown)"
-printf -- '    rendered against Home Assistant %s (tag: %s)\n' "$version" "$HA_VERSION" >"$stamp"
+{
+  printf -- '    rendered against Home Assistant %s (tag: %s)\n' "$version" "$HA_VERSION"
+  cdn_imports | sed 's/^/    /'
+} >"$stamp"
 
 exit "$status"
