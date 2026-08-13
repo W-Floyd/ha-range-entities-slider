@@ -49,6 +49,9 @@ const CURATED_THEMES = [
   "ios-dark-mode-dark-blue",
   "macOS Theme",
   "LCARS Default",
+  "Frosted Glass",
+  "Frosted Glass Dark",
+  "Pip-Boy",
 ];
 
 /** Scaffolding themes the packs ship for inheritance, not for use. */

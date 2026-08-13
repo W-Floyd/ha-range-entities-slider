@@ -33,8 +33,12 @@ promotes that section to the new version and refuses to run if it is empty.
   stylesheet URLs to add: LCARS ships its themes flattened outside `themes/`, and
   needs `lcars.js` and the Antonio font, plus the helper entities its README
   lists, which the test config declares at the theme's own default values.
+- Frosted Glass and Pip-Boy in the theme sweep. Both need only card-mod, which
+  the sweep already installs; Pip-Boy pulls its Share Tech Mono font in with an
+  `@import` inside the theme.
 - Theme sweep (`just render-themes`): installs the Material You, Catppuccin,
-  visionOS, Metrology, Graphite, iOS, macOS and LCARS theme packs and screenshots the
+  visionOS, Metrology, Graphite, iOS, macOS, LCARS, Frosted Glass and Pip-Boy
+  theme packs and screenshots the
   row under a curated selection, failing if the range handle is left unpainted
   under any of them. Runs weekly in CI.
 

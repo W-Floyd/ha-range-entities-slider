@@ -193,6 +193,8 @@ the row under a curated selection of them:
 | [lovelace-ios-themes](https://github.com/basnijholt/lovelace-ios-themes) | ios-light-mode-light-blue, ios-dark-mode-dark-blue |
 | [macOS-Theme](https://github.com/JuanMTech/macOS-Theme) | macOS Theme |
 | [ha-lcars](https://github.com/th3jesta/ha-lcars) | LCARS Default |
+| [frosted-glass-themes](https://github.com/wessamlauf/homeassistant-frosted-glass-themes) | Frosted Glass, Frosted Glass Dark |
+| [pipboy-theme](https://github.com/iosue-iulianus/homeassistant-pipboy-theme) | Pip-Boy |
 
 Packs declare what they need beyond a theme file, and the installer sets it up: where their themes
 live if not `themes/*.yaml` (ha-lcars builds a single flattened file), files to serve from `/local/`,
@@ -205,7 +207,7 @@ card-mod is installed as a dashboard resource, loaded before the theme modules a
 Metrology alone, plus visionOS, Liquid Glass and every Graphite variant — and those styles silently
 do nothing without it. The sweep asserts it registered.
 
-The packs expand to 80 themes, so the sweep renders a representative pair per pack rather than every
+The packs expand to 91 themes, so the sweep renders a representative pair per pack rather than every
 accent colour, and skips the "Do Not Use" base themes the packs ship for inheritance. Each theme is
 captured in light and dark only when that makes a difference: a theme that declares its colours
 outright, or declares light and dark modes with identical values, is captured once and its screenshot

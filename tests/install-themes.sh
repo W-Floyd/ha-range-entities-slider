@@ -51,6 +51,10 @@ THEMES=(
   # README requires both a script and a font stylesheet as resources. Antonio is
   # the Google Fonts option; the alternative, Tungsten, is not redistributable.
   "th3jesta/ha-lcars|theme_flat/lcars_flat.yaml|lcars.js>js,https://fonts.googleapis.com/css2?family=Antonio:wght@400;700&display=swap>css"
+  # Both need only card-mod, which is already first in this list. Pip-Boy pulls
+  # its own font in with an @import inside the theme, so it needs no resource.
+  "wessamlauf/homeassistant-frosted-glass-themes||"
+  "iosue-iulianus/homeassistant-pipboy-theme||"
 )
 
 resolve() {
