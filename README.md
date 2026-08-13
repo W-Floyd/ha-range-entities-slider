@@ -116,6 +116,8 @@ input_number:
 
 ## Configuration options
 
+The row has a visual editor, so it can be configured from the entities card's UI as well as in YAML.
+
 | Option              | Type   | Required | Description                                                        |
 | ------------------- | ------ | -------- | ------------------------------------------------------------------ |
 | `type`              | string | yes      | `custom:range-entity-row`                                          |

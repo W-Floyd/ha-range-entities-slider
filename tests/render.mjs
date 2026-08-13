@@ -705,6 +705,124 @@ try {
         `inverted row is coloured with the error colour (${inverted?.warningColor}, theme --error-color ${inverted?.errorColor})`,
       );
 
+      // The visual editor, instantiated the way hui-row-element-editor does:
+      // resolve the row's class, ask it for a config element, and drive it.
+      const editor = await page.evaluate(async () => {
+        const rowClass = customElements.get("range-entity-row");
+        if (!rowClass?.getConfigElement) return { supported: false };
+
+        const element = rowClass.getConfigElement();
+        element.hass = document.querySelector("home-assistant").hass;
+        element.setConfig({
+          type: "custom:range-entity-row",
+          entity: "input_number.lower_temp",
+          range_entity: "input_number.upper_temp",
+          name: "Temperature Range",
+        });
+        document.body.append(element);
+        await element.updateComplete;
+        // ha-form renders a row per schema entry once it has hass.
+        await new Promise((resolve) => setTimeout(resolve, 600));
+
+        const form = element.shadowRoot?.querySelector("ha-form");
+        const fields = [...(form?.shadowRoot?.querySelectorAll("ha-selector") ?? [])];
+        const changes = [];
+        element.addEventListener("config-changed", (event) =>
+          changes.push(event.detail.config),
+        );
+        // What the editor emits when a field is edited.
+        form?.dispatchEvent(
+          new CustomEvent("value-changed", {
+            detail: {
+              value: {
+                entity: "input_number.lower_temp",
+                range_entity: "input_number.upper_temp",
+                name: "Renamed",
+                warn_inverted: false,
+              },
+            },
+          }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Is the editor's toggle the same component Home Assistant uses in a
+        // row, and does it compute to the same styling?
+        const describeSwitch = (node) => {
+          if (!node) return null;
+          const style = getComputedStyle(node);
+          return {
+            tag: node.tagName.toLowerCase(),
+            checked: node.checked ?? null,
+            width: style.width,
+            height: style.height,
+            trackColor: style.getPropertyValue("--mdc-theme-secondary").trim(),
+          };
+        };
+        const deepFind = (root, tag) => {
+          const stack = [root];
+          while (stack.length) {
+            const node = stack.pop();
+            if (node?.tagName?.toLowerCase() === tag) return node;
+            stack.push(...(node?.children ?? []));
+            if (node?.shadowRoot) stack.push(node.shadowRoot);
+          }
+          return null;
+        };
+        const toggles = {
+          editor: describeSwitch(deepFind(element.shadowRoot, "ha-switch")),
+          stockRow: describeSwitch(
+            deepFind(
+              document.querySelector("home-assistant").shadowRoot,
+              "ha-switch",
+            ),
+          ),
+        };
+        const result = {
+          toggles,
+          supported: true,
+          tag: element.tagName.toLowerCase(),
+          hasForm: !!form,
+          fieldCount: fields.length,
+          schema: (form?.schema ?? []).map((entry) => entry.name),
+          emitted: changes[0] ?? null,
+        };
+        element.remove();
+        return result;
+      });
+      console.log(`\neditor: ${JSON.stringify(editor)}`);
+
+      expect(
+        editor.supported && editor.tag === "range-entity-row-editor",
+        `the row offers a visual editor (${editor.tag})`,
+      );
+      expect(
+        editor.hasForm && editor.fieldCount >= 5,
+        `the editor renders a field per option (${editor.fieldCount})`,
+      );
+      expect(
+        JSON.stringify(editor.schema) ===
+          JSON.stringify([
+            "entity",
+            "range_entity",
+            "name",
+            "icon",
+            "warn_inverted",
+          ]),
+        `the editor covers every documented option (${editor.schema?.join(", ")})`,
+      );
+      expect(
+        editor.emitted?.name === "Renamed" &&
+          editor.emitted?.warn_inverted === false,
+        `editing a field emits the new config (${JSON.stringify(editor.emitted)})`,
+      );
+      // The controls should be Home Assistant's own, not hand-rolled: the same
+      // ha-switch it uses everywhere else.
+      expect(
+        editor.toggles?.editor?.tag === "ha-switch" &&
+          editor.toggles?.stockRow?.tag === "ha-switch",
+        `the editor uses Home Assistant's own controls (${editor.toggles?.editor?.tag})`,
+      );
+
       // A row for an entity Home Assistant does not have must say so rather
       // than rendering nothing, which is indistinguishable from being absent.
       const gone = byName["Missing entity"];
@@ -967,6 +1085,49 @@ try {
     const overview = `${OUT_DIR}/overview-${HA_VERSION}-${colorScheme}.png`;
     await captureOverview(page, overview);
     console.log(`saved ${overview}`);
+
+    // The visual editor. Mounted inside Home Assistant's own element tree, not
+    // on document.body: an ha-entity-picker collapses to nothing outside it,
+    // since it takes its layout from the styling Home Assistant sets at the
+    // root, which is why the first attempt at this capture had blank rows where
+    // the two pickers should be.
+    await page.evaluate(async () => {
+      const root = document.querySelector("home-assistant").shadowRoot;
+      const host = document.createElement("div");
+      host.id = "editor-capture";
+      host.style.cssText = [
+        "position: fixed",
+        "inset: 24px auto auto 24px",
+        "width: 420px",
+        "padding: 16px",
+        "border-radius: 12px",
+        "z-index: 9999",
+        "background: var(--card-background-color, #fff)",
+        "color: var(--primary-text-color, #000)",
+        "box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25)",
+      ].join(";");
+      const element = customElements.get("range-entity-row").getConfigElement();
+      element.hass = document.querySelector("home-assistant").hass;
+      element.setConfig({
+        type: "custom:range-entity-row",
+        entity: "input_number.lower_temp",
+        range_entity: "input_number.upper_temp",
+        name: "Temperature Range",
+        icon: "mdi:thermometer",
+      });
+      host.append(element);
+      root.append(host);
+      await element.updateComplete;
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    });
+    const editorShot = `${OUT_DIR}/editor-${HA_VERSION}-${colorScheme}.png`;
+    await page.locator("#editor-capture").screenshot({ path: editorShot });
+    console.log(`saved ${editorShot}`);
+    await page.evaluate(() => {
+      const root = document.querySelector("home-assistant").shadowRoot;
+      root.querySelector("#editor-capture")?.remove();
+    });
+
 
     await context.close();
   }

@@ -17,6 +17,7 @@ import type { HomeAssistant } from "custom-card-helpers";
 import type { HassEntity } from "home-assistant-js-websocket";
 import { LitElement, html, css, nothing } from "lit";
 import type { PropertyValues, TemplateResult } from "lit";
+import "./editor.js";
 import { RANGE_SLIDER_STYLE_ID, thumbCss } from "./thumb-styles.js";
 import type {
   GenericRowConfig,
@@ -31,6 +32,19 @@ export const VERSION = "0.1.0";
 const SUPPORTED_DOMAINS = ["input_number", "number"];
 
 export class RangeEntityRow extends LitElement {
+  /**
+   * The visual editor Home Assistant opens for this row, resolved the same way
+   * a card's is: hui-row-element-editor looks up the row class and calls this.
+   */
+  static getConfigElement(): HTMLElement {
+    return document.createElement("range-entity-row-editor");
+  }
+
+  /** What the editor starts from when the row is added without a config. */
+  static getStubConfig(): Partial<RangeEntityRowConfig> {
+    return { entity: "", range_entity: "" };
+  }
+
   static override get properties() {
     return {
       hass: {},

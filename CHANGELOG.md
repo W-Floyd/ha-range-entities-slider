@@ -87,6 +87,12 @@ promotes that section to the new version and refuses to run if it is empty.
   its slider rows horizontal gutters after that, so the row sits about 8px out of
   alignment with its neighbours on anything earlier.
 
+- A visual editor, so the row can be configured from the entities card's UI
+  rather than only in YAML. Rows get editors the same way cards do —
+  `hui-row-element-editor` resolves the row's class and calls its static
+  `getConfigElement()` — and it is built on `ha-form` with a selector schema, so
+  the entity pickers, icon picker and layout are Home Assistant's own.
+
 ### Changed
 
 - The card is now TypeScript under `src/`, bundled with esbuild, with Lit
