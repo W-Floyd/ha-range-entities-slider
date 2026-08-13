@@ -113,6 +113,10 @@ promotes that section to the new version and refuses to run if it is empty.
 - Values are clamped to each entity's own `min`/`max` before being written. The
   slider spans the widest range across the pair, so a handle could reach a value
   its own entity would reject.
+- With both handles on the same value, material-you painted stray slivers beside
+  them: the active track has no width there, so the gap and its corner shapes had
+  nothing to sit against. The slider is now marked collapsed in that case, which
+  also covers a row whose partner is unavailable.
 - An unavailable entity read as "Unavailable", which is both unlike the stock
   row — it shows an em dash — and too long for the column, wrapping mid-word.
 - The unit could disappear from the readout under a theme with a wide font — the

@@ -279,6 +279,7 @@ class RangeEntityRow extends LitElement {
           <ha-slider
             labeled
             range
+            ?collapsed=${this._lowerVal === this._upperVal}
             .disabled=${unavailable.length > 0}
             .min=${min}
             .max=${max}
@@ -368,6 +369,17 @@ class RangeEntityRow extends LitElement {
         :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #indicator,
         :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #indicator {
           margin-inline: 4px !important;
+        }
+
+        /* With both handles on the same value the active track has no width,
+           so the gap and its corner shapes have nothing to sit against and
+           paint as stray slivers beside the handle. */
+        :host([range][collapsed]) #indicator {
+          margin-inline: 0 !important;
+        }
+        :host([range][collapsed]) #indicator::before,
+        :host([range][collapsed]) #indicator::after {
+          display: none !important;
         }
 
         /* The utilities' own ::after shapes the right-hand inner corner; this is

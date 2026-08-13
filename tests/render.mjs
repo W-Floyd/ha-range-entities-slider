@@ -300,6 +300,8 @@ const HANDLE_PROBE = (el) => {
  * margin, since the view element runs the full height of the viewport and would
  * otherwise leave most of the image empty.
  */
+let DRAG_RESET_TOKEN = "";
+
 async function captureOverview(page, file) {
   // Home Assistant raises a "started" toast on boot which would otherwise sit
   // across the bottom of every capture.
@@ -366,7 +368,25 @@ async function captureOverview(page, file) {
   if (dragFrom) {
     await page.mouse.move(dragFrom.x, dragFrom.y, { steps: 6 });
     await page.mouse.up();
-    await page.waitForTimeout(200);
+    // The handle narrows under some themes while it is being dragged, so the
+    // pointer landing back where it started does not put the value back. Reset
+    // explicitly, or each capture starts from where the last one left off.
+    await Promise.all(
+      [
+        ["input_number.drag_low", 18],
+        ["input_number.drag_high", 24],
+      ].map(([entity_id, value]) =>
+        fetch(`${HA_URL}/api/services/input_number/set_value`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${DRAG_RESET_TOKEN}`,
+          },
+          body: JSON.stringify({ entity_id, value }),
+        }),
+      ),
+    );
+    await page.waitForTimeout(300);
   }
 }
 
@@ -382,6 +402,7 @@ console.log(`==> waiting for Home Assistant (${HA_VERSION}) at ${HA_URL}`);
 await waitForHomeAssistant();
 
 const token = process.env.HA_TOKEN || (await onboard());
+DRAG_RESET_TOKEN = token;
 console.log("==> onboarded");
 
 // The tag says "stable"; this says which release that resolved to, which is
@@ -615,6 +636,7 @@ try {
           const icon = shadow?.querySelector("ha-icon.inverted-warning");
           return {
             warningRow: shadow?.querySelector("hui-warning")?.textContent?.trim() ?? null,
+            collapsed: slider?.hasAttribute("collapsed") ?? null,
             sliderDisabled: slider?.hasAttribute("disabled") ?? null,
             name: el.config?.name ?? null,
             entity: el.config?.entity ?? null,
@@ -731,6 +753,12 @@ try {
       expect(
         equal?.minValue === 20 && equal?.maxValue === 20,
         `equal values render both handles at the same point (${equal?.minValue}/${equal?.maxValue})`,
+      );
+      // Themes that put a gap either side of the active track have nothing to
+      // set it against when the handles coincide, and paint stray slivers.
+      expect(
+        equal?.collapsed === true && byEntity.lower_temp?.collapsed === false,
+        `coincident handles mark the slider collapsed (${equal?.collapsed}, apart: ${byEntity.lower_temp?.collapsed})`,
       );
 
       // step: 1, so this one should carry no decimals at all.
@@ -942,6 +970,26 @@ try {
 
     await context.close();
   }
+
+  // Each capture holds a drag on the top row; if that did not reset cleanly,
+  // every capture would start from where the last one left off.
+  const dragState = await Promise.all(
+    ["input_number.drag_low", "input_number.drag_high"].map(async (id) =>
+      parseFloat(
+        (
+          await (
+            await fetch(`${HA_URL}/api/states/${id}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+          ).json()
+        ).state,
+      ),
+    ),
+  );
+  expect(
+    dragState[0] === 18 && dragState[1] === 24,
+    `the captures leave the drag row as they found it (${dragState.join("/")})`,
+  );
 
   if (SWEEP_THEMES) {
     const installed = (await getThemes(token)).filter(
