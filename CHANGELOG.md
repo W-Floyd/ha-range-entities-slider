@@ -37,7 +37,9 @@ promotes that section to the new version and refuses to run if it is empty.
   tests, the settings, the remote digest of the Home Assistant image, and the
   commits the theme packs point at — restoring the previous screenshots instead.
   CI keys its caches on the same fingerprint, and the version the instance
-  actually reported is recorded beside the screenshots.
+  actually reported is recorded beside the screenshots. The weekly run ignores
+  it and always renders: the card loads Lit from unpkg at runtime, which floats
+  across 2.x and so is outside anything the fingerprint can cover.
 - Theme packs are pinned to the commit their default branch points at and cached
   under it, so an upstream theme release invalidates both the download and the
   render, and the release notes list what the captures were taken against.

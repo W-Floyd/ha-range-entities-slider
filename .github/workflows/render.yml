@@ -74,10 +74,14 @@ jobs:
             tests/.render-cache
           key: render-${{ steps.fingerprint.outputs.key }}
 
+      # The weekly run exists to re-verify against the live world, so it never
+      # takes the cached answer: the card loads Lit from unpkg at runtime, which
+      # floats across 2.x and so is in nothing the fingerprint covers.
       - name: Render against Home Assistant ${{ matrix.ha_version }}
         env:
           SWEEP_THEMES: ${{ inputs.sweep && '1' || '0' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_RENDER: ${{ github.event_name == 'schedule' && '1' || '0' }}
         run: tests/render.sh ${{ matrix.ha_version }}
 
       - name: Upload screenshots
@@ -130,6 +134,8 @@ jobs:
           SWEEP_THEMES: "1"
           # Raises the GitHub API rate limit for the theme tarball downloads.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # As above: the scheduled run always renders rather than restoring.
+          FORCE_RENDER: ${{ github.event_name == 'schedule' && '1' || '0' }}
         run: tests/render.sh stable
 
       - name: Upload theme screenshots
