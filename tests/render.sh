@@ -40,12 +40,15 @@ OUT_DIR="${OUT_DIR:-$ROOT/tests/screenshots}"
 
 stamp_dir="${RENDER_CACHE:-$ROOT/tests/.render-cache}"
 
-# The card is built from src/ and not committed, so make sure it exists and is
-# no older than the source before anything is rendered against it.
-if [[ ! -f "$ROOT/ha-range-entities-slider.js" ]] ||
-  [[ -n "$(find "$ROOT/src" -newer "$ROOT/ha-range-entities-slider.js" -type f -print -quit 2>/dev/null)" ]]; then
-  "$ROOT/tools/build.sh"
-fi
+# The card is built from src/ and not committed. Building is deferred until a
+# render is actually going to happen: --fingerprint has to print one line and
+# nothing else, and the fingerprint is taken from the sources anyway.
+build_card() {
+  if [[ ! -f "$ROOT/ha-range-entities-slider.js" ]] ||
+    [[ -n "$(find "$ROOT/src" -newer "$ROOT/ha-range-entities-slider.js" -type f -print -quit 2>/dev/null)" ]]; then
+    "$ROOT/tools/build.sh"
+  fi
+}
 
 # Resolve the theme commits once and reuse that list for the fingerprint, the
 # install and the stamp. Resolving per consumer left a window in which a pack
@@ -74,11 +77,12 @@ cdn_imports() {
       # Cannot tell which version would load: never claim a run is up to date.
       echo "${url} -> unresolved-$(date +%s)"
     fi
-    # Only import specifiers, not any URL that happens to appear in the file:
-    # the bundled Lit carries https://lit.dev/msg/ links in its warnings, and
-    # resolving those would make this depend on a documentation site.
-  done < <(grep -oE '(from|import)[[:space:]]*\(?["'"'"']https://[^"'"'"']+' \
-    "$ROOT/ha-range-entities-slider.js" |
+    # Only import specifiers, and read from the sources rather than the build:
+    # bundled dependencies carry documentation URLs in their warnings, and
+    # resolving those would tie this to a documentation site. Lit is bundled, so
+    # this finds nothing today — it is here to notice a CDN import coming back.
+  done < <(grep -rhoE '(from|import)[[:space:]]*\(?["'"'"']https://[^"'"'"']+' \
+    "$ROOT/src" |
     grep -oE 'https://[^"'"'"']+' | sort -u)
 }
 
@@ -103,7 +107,11 @@ fingerprint() {
       cat "$theme_pins"
     fi
     echo "strict=${STRICT_THUMBS:-1}/${STRICT_THEMES:-1}"
-    find "$ROOT/ha-range-entities-slider.js" "$ROOT/tests" -type f \
+    # The sources the card is built from, not the build: the artifact is derived
+    # from these, and hashing it would mean building before a fingerprint can be
+    # taken — which the caller may only want in order to decide whether to.
+    find "$ROOT/src" "$ROOT/tools" "$ROOT/tests" \
+      "$ROOT/package.json" "$ROOT/package-lock.json" -type f \
       -not -path "*/screenshots/*" -not -path "*/.theme-cache/*" \
       -not -path "*/.render-cache/*" -print0 |
       sort -z | xargs -0 shasum -a 256
@@ -141,6 +149,8 @@ trap cleanup EXIT
 
 # The seed config is copied out of the repo so Home Assistant's generated
 # .storage, logs, and database never touch the working tree.
+build_card
+
 echo "==> preparing config (${workdir})"
 cp -R "$ROOT/tests/ha-config/." "$workdir/"
 mkdir -p "$workdir/www" "$workdir/themes" "$OUT_DIR"
