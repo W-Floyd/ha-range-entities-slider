@@ -42,7 +42,10 @@ promotes that section to the new version and refuses to run if it is empty.
   screenshots.
 - Theme packs are pinned to the commit their default branch points at and cached
   under it, so an upstream theme release invalidates both the download and the
-  render, and the release notes list what the captures were taken against.
+  render, and the release notes list what the captures were taken against. Those
+  commits are resolved once per run and passed to the fingerprint, the download
+  and the recorded versions through `THEME_PINS`, so a pack that moves mid-run
+  cannot leave the three disagreeing.
 - One screenshot per colour scheme of a single list holding the custom row, the
   stock rows and the edge cases, replacing four separate element captures. The
   theme sweep frames its captures the same way.

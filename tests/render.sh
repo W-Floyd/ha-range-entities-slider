@@ -40,6 +40,19 @@ OUT_DIR="${OUT_DIR:-$ROOT/tests/screenshots}"
 
 stamp_dir="${RENDER_CACHE:-$ROOT/tests/.render-cache}"
 
+# Resolve the theme commits once and reuse that list for the fingerprint, the
+# install and the stamp. Resolving per consumer left a window in which a pack
+# could move between them, so the run would render one version and record
+# another. A caller (CI, which needs them for its cache key) can pass its own
+# list in through THEME_PINS.
+theme_pins="${THEME_PINS:-}"
+if [[ "${SWEEP_THEMES:-0}" == "1" && -z "$theme_pins" ]]; then
+  theme_pins="$(mktemp)"
+  own_pins=1
+  "$ROOT/tests/install-themes.sh" --versions >"$theme_pins"
+fi
+export THEME_PINS="$theme_pins"
+
 # What the card's runtime imports currently resolve to. It loads Lit from unpkg
 # with a floating major (lit@2 -> lit@2.8.0 today), so a Lit release changes what
 # the browser executes without a byte of this repo changing. Resolving the
@@ -74,8 +87,8 @@ fingerprint() {
     echo "sweep=${SWEEP_THEMES:-0} all=${ALL_THEMES:-0} filter=${THEME_FILTER:-}"
     # A theme release changes what the sweep captures, so it has to invalidate
     # the render as surely as a change to the card does.
-    if [[ "${SWEEP_THEMES:-0}" == "1" ]]; then
-      "$ROOT/tests/install-themes.sh" --versions
+    if [[ -n "$theme_pins" && -f "$theme_pins" ]]; then
+      cat "$theme_pins"
     fi
     echo "strict=${STRICT_THUMBS:-1}/${STRICT_THEMES:-1}"
     find "$ROOT/ha-range-entities-slider.js" "$ROOT/tests" -type f \
@@ -88,6 +101,7 @@ fingerprint() {
 print=$(fingerprint)
 if [[ "$fingerprint_only" == "1" ]]; then
   echo "$print"
+  [[ "${own_pins:-0}" == "1" ]] && rm -f "$theme_pins"
   exit 0
 fi
 
@@ -102,6 +116,7 @@ fi
 
 workdir="$(mktemp -d)"
 cleanup() {
+  [[ "${own_pins:-0}" == "1" ]] && rm -f "$theme_pins"
   if [[ "${KEEP_HA:-0}" == "1" ]]; then
     echo "==> leaving ${CONTAINER} running on http://localhost:${PORT} (user: render / render-password)"
   else

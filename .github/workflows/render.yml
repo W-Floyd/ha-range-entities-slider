@@ -39,11 +39,16 @@ jobs:
       # Keyed on what the packs currently point at, so a theme release fetches
       # the new tarball. Tarballs are named per commit, so a partial restore
       # still spares every pack that has not moved.
+      # Resolved once and passed to the render through THEME_PINS, so the cache
+      # key, the download and the recorded versions cannot disagree if a pack
+      # moves mid-run.
       - name: Resolve theme versions
         if: inputs.sweep
         id: themes
         run: |
-          echo "key=$(tests/install-themes.sh --versions | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          tests/install-themes.sh --versions > theme-pins.txt
+          echo "key=$(shasum -a 256 theme-pins.txt | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          cat theme-pins.txt
 
       - name: Cache theme downloads
         if: inputs.sweep
@@ -60,6 +65,7 @@ jobs:
         id: fingerprint
         env:
           SWEEP_THEMES: ${{ inputs.sweep && '1' || '0' }}
+          THEME_PINS: ${{ inputs.sweep && 'theme-pins.txt' || '' }}
         run: |
           echo "key=$(tests/render.sh --fingerprint ${{ matrix.ha_version }})" >> "$GITHUB_OUTPUT"
 
@@ -75,6 +81,7 @@ jobs:
         env:
           SWEEP_THEMES: ${{ inputs.sweep && '1' || '0' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          THEME_PINS: ${{ inputs.sweep && 'theme-pins.txt' || '' }}
         run: tests/render.sh ${{ matrix.ha_version }}
 
       - name: Upload screenshots

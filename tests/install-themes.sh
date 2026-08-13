@@ -16,6 +16,10 @@
 # so a theme release invalidates both.
 #
 # Env:
+#   THEME_PINS=<file>   use the commits in this file (the output of --versions)
+#                       instead of resolving again, so a pack that moves midway
+#                       through a run cannot leave the fingerprint, the download
+#                       and the recorded versions disagreeing
 #   THEME_CACHE=<dir>   where tarballs are kept (default tests/.theme-cache)
 #   REFRESH_THEMES=1    ignore the cache and re-download everything
 #   GITHUB_TOKEN=<tok>  raises the API rate limit; CI sets this automatically
@@ -45,6 +49,19 @@ resolve() {
   git ls-remote "https://github.com/$1" HEAD 2>/dev/null | cut -f1 | head -1
 }
 
+# A pinned commit if the caller resolved one already, otherwise resolve it now.
+lookup() {
+  local repo="$1" pin
+  if [[ -n "${THEME_PINS:-}" && -f "${THEME_PINS}" ]]; then
+    pin="$(awk -v r="$repo" '$1 == r { print $2; exit }' "${THEME_PINS}")"
+    if [[ -n "$pin" ]]; then
+      echo "$pin"
+      return 0
+    fi
+  fi
+  resolve "$repo"
+}
+
 if [[ "${1:-}" == "--versions" ]]; then
   for entry in "${THEMES[@]}"; do
     repo="${entry%%|*}"
@@ -69,7 +86,7 @@ for entry in "${THEMES[@]}"; do
   extra="${entry##*|}"
   slug="${repo//\//-}"
 
-  commit="$(resolve "$repo")"
+  commit="$(lookup "$repo")"
   if [[ -z "$commit" ]]; then
     # Cannot tell which version is current: fall back to whatever is cached
     # rather than failing the run, but say so.
