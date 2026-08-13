@@ -32,7 +32,7 @@ promotes that section to the new version and refuses to run if it is empty.
   declare where their themes live, which files to serve from `/local/`, and which
   stylesheet URLs to add: LCARS ships its themes flattened outside `themes/`, and
   needs `lcars.js` and the Antonio font, plus the helper entities its README
-  lists, which the test config now declares.
+  lists, which the test config declares at the theme's own default values.
 - Theme sweep (`just render-themes`): installs the Material You, Catppuccin,
   visionOS, Metrology, Graphite, iOS, macOS and LCARS theme packs and screenshots the
   row under a curated selection, failing if the range handle is left unpainted

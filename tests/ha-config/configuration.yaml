@@ -6,8 +6,11 @@ frontend:
   # Empty when the theme sweep is off; populated by tests/install-themes.sh.
   themes: !include_dir_merge_named themes
 
-# ha-lcars drives its borders and options from these; without them its themes
-# render with the defaults its README warns about.
+# ha-lcars reads these exact entity ids from its card-mod templates and
+# interpolates them straight into CSS — the numbers are pixel sizes, the toggles
+# gate effects. Every one has a built-in fallback, so they are optional; the
+# values below are the theme's own defaults, so the captures look like a stock
+# LCARS install rather than one that has been fiddled with.
 input_boolean:
   lcars_sound:
     name: LCARS Sound
@@ -20,24 +23,27 @@ template:
         state: "LCARS"
 
 input_number:
+  # --lcars-vertical-border and --lcars-middle-vertical-border, in px
   lcars_vertical:
     name: LCARS Vertical
     min: 26
     max: 60
     step: 1
-    initial: 26
+    initial: 35
+  # --lcars-horizontal-border, in px
   lcars_horizontal:
     name: LCARS Horizontal
     min: 6
     max: 60
     step: 1
-    initial: 24
+    initial: 10
+  # --menu-font-size for the sidebar, in px
   lcars_menu_font:
     name: LCARS Menu Font
     min: 6
     max: 60
     step: 1
-    initial: 14
+    initial: 24
 
   lower_temp:
     name: Lower Temp
