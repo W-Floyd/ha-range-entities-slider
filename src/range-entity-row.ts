@@ -27,7 +27,7 @@ import type {
 } from "./types.js";
 
 /** Single source of truth for the version; bumped by `just bump`. */
-export const VERSION = "0.1.0";
+export const VERSION = "1.0.0";
 
 const SUPPORTED_DOMAINS = ["input_number", "number"];
 
