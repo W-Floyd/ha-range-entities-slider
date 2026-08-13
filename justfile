@@ -131,7 +131,9 @@ bump level="patch":
 
     just check
 
-    git add {{ src }} {{ js }} CHANGELOG.md
+    # The built card is gitignored and attached to the release instead, so only
+    # the source and the changelog are committed here.
+    git add {{ src }} CHANGELOG.md
     git commit -m "Release v${next}"
     git tag -a "v${next}" -m "v${next}"
     echo "bumped ${current} -> ${next} and tagged v${next}; run 'just release' to publish"
