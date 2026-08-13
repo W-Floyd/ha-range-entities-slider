@@ -143,6 +143,67 @@ class RangeEntityRow extends LitElement {
     `;
   }
 
+  /**
+   * Home Assistant does not paint handles on a range slider at all — with no
+   * styling of our own the handles show only as gaps in the track. What they
+   * should look like depends on the active theme, so pick per theme:
+   *
+   * - material-you: vertical bars, matching that theme's own slider handles.
+   * - everything else: a round knob, matching the stock input_number row.
+   */
+  _rangeSliderThumbCss(materialYou) {
+    if (materialYou) {
+      return `
+        /* Apply same thumb styling to range slider thumbs */
+        :host([range]) #thumb-min,
+        :host([range]) #thumb-max {
+          overflow: visible;
+          background: var(--ha-slider-thumb-negative-color);
+          border-radius: 0;
+          transition:
+            width var(--md-sys-motion-expressive-spatial-default),
+            left var(--md-sys-motion-expressive-spatial-default);
+        }
+        :host([range]) #thumb-min::before,
+        :host([range]) #thumb-max::before {
+          content: '';
+          position: absolute;
+          height: var(--thumb-actual-height);
+          width: 4px;
+          top: calc(-0.5 * (var(--thumb-actual-height) - var(--ha-slider-track-size)));
+          left: 50%;
+          transform: translateX(-50%);
+          border-radius: var(--md-sys-shape-corner-full);
+          background: var(--md-sys-color-primary);
+        }
+        :host([range]) #indicator::after {
+          display: none !important;
+        }
+        :host([range]) #indicator {
+          margin-inline-end: 0 !important;
+          box-shadow: none !important;
+        }
+      `;
+    }
+
+    /* Match the knob on a stock input_number slider row. The thumb element is
+       already sized by Home Assistant exactly as the stock knob is, so painting
+       it directly — rather than drawing a shape over it — keeps the two in step
+       through upstream sizing changes and the slider's size variants.
+       --slider-color is what the stock knob and the indicator use. */
+    return `
+      :host([range]) #thumb-min,
+      :host([range]) #thumb-max {
+        background: var(--slider-color, var(--primary-color, #03a9f4));
+        border-radius: 50%;
+        /* Range thumbs carry a 1px white border that the stock knob does not.
+           With border-box sizing it eats into the same 16px, leaving a white
+           ring around a smaller dot. */
+        border: none;
+      }
+    `;
+  }
+
   _fixMaterialYouRangeSlider() {
     try {
       const slider = this.shadowRoot?.querySelector("ha-slider");
@@ -152,56 +213,25 @@ class RangeEntityRow extends LitElement {
         const sliderShadow = slider.shadowRoot;
         if (!sliderShadow) return;
 
-        if (!sliderShadow.querySelector("#range-slider-fix")) {
-          const style = document.createElement("style");
-          style.id = "range-slider-fix";
-          style.textContent = `
-            /* Apply same thumb styling to range slider thumbs.
-               The --md-sys-* and --thumb-* variables only exist under the
-               material-you theme. Without fallbacks the handle bar computes to
-               zero height in an undefined colour, so under every other theme
-               the handle vanished and only a gap in the track marked it. The
-               fallbacks are inert wherever material-you defines these. */
-            :host([range]) #thumb-min,
-            :host([range]) #thumb-max {
-              --range-thumb-height: var(--thumb-actual-height, 20px);
-              --range-track-size: var(--ha-slider-track-size, 4px);
-              --range-thumb-color: var(
-                --md-sys-color-primary,
-                var(--primary-color, #03a9f4)
-              );
-              overflow: visible;
-              background: var(--ha-slider-thumb-negative-color, transparent);
-              border-radius: 0;
-              transition:
-                width var(--md-sys-motion-expressive-spatial-default, 0.2s ease),
-                left var(--md-sys-motion-expressive-spatial-default, 0.2s ease);
-            }
-            :host([range]) #thumb-min::before,
-            :host([range]) #thumb-max::before {
-              content: '';
-              position: absolute;
-              height: var(--range-thumb-height);
-              width: 4px;
-              top: calc(-0.5 * (var(--range-thumb-height) - var(--range-track-size)));
-              left: 50%;
-              transform: translateX(-50%);
-              border-radius: var(--md-sys-shape-corner-full, 2px);
-              background: var(--range-thumb-color);
-            }
-            :host([range]) #indicator::after {
-              display: none !important;
-            }
-            :host([range]) #indicator {
-              margin-inline-end: 0 !important;
-              box-shadow: none !important;
-            }
-          `;
-          sliderShadow.appendChild(style);
-        }
+        // The theme can change while the card is live, so the variant is
+        // recorded and the style replaced when it no longer matches.
+        const materialYou = !!getComputedStyle(this)
+          .getPropertyValue("--md-sys-color-primary")
+          .trim();
+        const variant = materialYou ? "material-you" : "default";
+
+        const existing = sliderShadow.querySelector("#range-slider-fix");
+        if (existing?.dataset.variant === variant) return;
+        existing?.remove();
+
+        const style = document.createElement("style");
+        style.id = "range-slider-fix";
+        style.dataset.variant = variant;
+        style.textContent = this._rangeSliderThumbCss(materialYou);
+        sliderShadow.appendChild(style);
       }, 50);
     } catch (e) {
-      console.debug("Could not fix material-you range slider:", e);
+      console.debug("Could not style the range slider thumbs:", e);
     }
   }
 

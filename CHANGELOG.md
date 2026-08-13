@@ -28,11 +28,12 @@ promotes that section to the new version and refuses to run if it is empty.
 ### Fixed
 
 - Range handles were invisible under every theme except material-you, showing
-  only as a gap in the track. The handle styling relied on `--md-sys-color-primary`,
-  `--thumb-actual-height`, and `--ha-slider-track-size`, which only the
-  material-you theme defines, so elsewhere the handle bar computed to zero height
-  in an undefined colour. These now fall back to `--primary-color` and fixed
-  sizes; material-you renders pixel-identically to before.
+  only as a gap in the track. The handle styling was material-you's — bars drawn
+  from `--md-sys-*` variables no other theme defines — and was applied
+  unconditionally. The styling now branches on whether material-you is active:
+  under it the bars are unchanged, and elsewhere the handles match the knob on a
+  stock `input_number` slider row, matching its size, shape, colour and lack of
+  border. material-you renders pixel-identically to before.
 
 ## [0.1.0] - 2026-08-13
 

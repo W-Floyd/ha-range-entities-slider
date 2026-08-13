@@ -82,6 +82,7 @@ docker run --rm \
   -e STRICT_THEMES="${STRICT_THEMES:-1}" \
   -e THEME_FILTER="${THEME_FILTER:-}" \
   -e ALL_THEMES="${ALL_THEMES:-0}" \
+  -e DIAGNOSE_PATCH="${DIAGNOSE_PATCH:-0}" \
   "$RENDER_IMAGE" node /tests/render.mjs || status=$?
 
 if [[ "$status" != "0" ]]; then

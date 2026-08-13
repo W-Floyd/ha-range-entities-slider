@@ -337,6 +337,59 @@ try {
         "custom row is the same width as the stock slider row",
       );
 
+      // Under a non-material-you theme the handle should be indistinguishable
+      // from the knob on the stock row: same size, shape and colour.
+      const [handle, knob] = await Promise.all([
+        row.evaluate((el) => {
+          const thumb = el.shadowRoot
+            ?.querySelector("ha-slider")
+            ?.shadowRoot?.querySelector("#thumb-min");
+          if (!thumb) return null;
+          const style = getComputedStyle(thumb);
+          return {
+            size: `${style.width}x${style.height}`,
+            background: style.backgroundColor,
+            radius: style.borderRadius,
+            border: style.border,
+          };
+        }),
+        stockRow.evaluate((el) => {
+          const thumb = el.shadowRoot
+            ?.querySelector("ha-slider")
+            ?.shadowRoot?.querySelector("#thumb");
+          if (!thumb) return null;
+          const style = getComputedStyle(thumb);
+          return {
+            size: `${style.width}x${style.height}`,
+            background: style.backgroundColor,
+            radius: style.borderRadius,
+            border: style.border,
+          };
+        }),
+      ]);
+      console.log(
+        `handle: ${JSON.stringify(handle)}\n  knob: ${JSON.stringify(knob)}`,
+      );
+
+      expect(
+        !!handle && !!knob && handle.size === knob.size,
+        `handle is the same size as the stock knob (${handle?.size} vs ${knob?.size})`,
+      );
+      expect(
+        !!handle && !!knob && handle.background === knob.background,
+        `handle is the same colour as the stock knob (${handle?.background} vs ${knob?.background})`,
+      );
+      expect(
+        !!handle && !!knob && handle.radius === knob.radius,
+        `handle is the same shape as the stock knob (${handle?.radius} vs ${knob?.radius})`,
+      );
+      // Range thumbs ship a 1px white border the stock knob lacks; unhandled it
+      // shows as a white ring around a shrunken dot.
+      expect(
+        !!handle && !!knob && handle.border === knob.border,
+        `handle has no border the stock knob lacks (${handle?.border} vs ${knob?.border})`,
+      );
+
       console.log(`\n--- probe (HA ${HA_VERSION}) ---`);
       console.log(JSON.stringify(probe, null, 2));
       console.log("---\n");
@@ -465,6 +518,19 @@ try {
         await page
           .locator("hui-entities-card")
           .screenshot({ path: `${themeDir}/${slug}-${colorScheme}.png` });
+
+        // Optional side-by-side: what the row looks like with the card's whole
+        // shadow-DOM patch detached, i.e. Home Assistant's own range slider.
+        if (process.env.DIAGNOSE_PATCH === "1") {
+          await row.evaluate((el) => {
+            const shadow = el.shadowRoot?.querySelector("ha-slider")?.shadowRoot;
+            shadow?.querySelector("#range-slider-fix")?.remove();
+          });
+          await page.waitForTimeout(250);
+          await page.locator("hui-entities-card").screenshot({
+            path: `${themeDir}/${slug}-${colorScheme}-nopatch.png`,
+          });
+        }
       }
 
       await context.close();
