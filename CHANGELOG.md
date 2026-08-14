@@ -10,6 +10,28 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ## [Unreleased]
 
+### Fixed
+
+- The handle narrows while it is dragged in Firefox. Its held styling was keyed
+  on `#slider:has(~ #tooltip-thumb-max[open])`, which Firefox matches and gives
+  the right precedence, but it never recomputes the thumb's `scale` when the
+  tooltip's attribute appears — so the track tightened around a handle that
+  stayed full width. The card now mirrors which handle is held onto the slider as
+  a `held` attribute and the styling keys on that, which invalidates in every
+  engine.
+
+### Added
+
+- `BROWSER=firefox`/`BROWSER=webkit` run the checks in those engines, and a
+  weekly Browsers workflow does both against Material You. The held-handle check
+  now compares the row with the stock slider in the same engine rather than with
+  remembered Chromium numbers, so an engine that treats the two differently fails
+  instead of passing quietly.
+- The Playwright image's remote digest joins the render fingerprint, so a rebuild
+  of the tag that ships the browser binaries invalidates a run the way a new Home
+  Assistant release does. The pinned version was already covered, being part of
+  the hashed sources.
+
 ### Changed
 
 - A theme whose modes are shipped as two themes rather than declared with

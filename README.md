@@ -3,6 +3,7 @@
 [![HA stable](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/stable.yml/badge.svg)](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/stable.yml)
 [![HA beta](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/beta.yml/badge.svg)](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/beta.yml)
 [![Themes](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/themes.yml/badge.svg)](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/themes.yml)
+[![Browsers](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/browsers.yml/badge.svg)](https://github.com/W-Floyd/ha-range-entities-slider/actions/workflows/browsers.yml)
 
 A Home Assistant Lovelace **entity row** that renders two `input_number` or `number` entities as a
 single dual-handle range slider.

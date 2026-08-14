@@ -360,10 +360,59 @@ export class RangeEntityRow extends LitElement {
         style.dataset["variant"] = variant;
         style.textContent = thumbCss(materialYou);
         sliderShadow.appendChild(style);
+
+        this._trackHeldHandle(slider, sliderShadow);
       }, 50);
     } catch (error) {
       console.debug("Could not style the range slider thumbs:", error);
     }
+  }
+
+  /**
+   * Mirrors which handle is being held onto the slider as a `held` attribute.
+   *
+   * The state itself belongs to the per-handle value tooltips, which Home
+   * Assistant opens while a handle is dragged or focused, so the styling could
+   * read it with `#slider:has(~ #tooltip-thumb-max[open])` — and does, for the
+   * track either side of the handle. What it cannot do that way is narrow the
+   * handle itself in Firefox: the rule matches and takes precedence, but the
+   * engine never recomputes the thumb's own `scale` when the tooltip's attribute
+   * appears, so the handle keeps its full width until something unrelated forces
+   * a restyle. An attribute on the host invalidates everywhere.
+   */
+  private _heldObserver?: MutationObserver;
+
+  private _trackHeldHandle(slider: Element, sliderShadow: ShadowRoot): void {
+    this._heldObserver?.disconnect();
+
+    const tooltips = ["min", "max"].map((end) => ({
+      end,
+      node: sliderShadow.querySelector(`#tooltip-thumb-${end}`),
+    }));
+    if (!tooltips.some(({ node }) => node)) return;
+
+    const sync = () => {
+      const held = tooltips.find(({ node }) => node?.hasAttribute("open"));
+      if (held) slider.setAttribute("held", held.end);
+      else slider.removeAttribute("held");
+    };
+
+    this._heldObserver = new MutationObserver(sync);
+    for (const { node } of tooltips) {
+      if (node) {
+        this._heldObserver.observe(node, {
+          attributes: true,
+          attributeFilter: ["open"],
+        });
+      }
+    }
+    sync();
+  }
+
+  override disconnectedCallback(): void {
+    this._heldObserver?.disconnect();
+    this._heldObserver = undefined;
+    super.disconnectedCallback();
   }
 
   // ── Slider events ───────────────────────────────────────────────────────────

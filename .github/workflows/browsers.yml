@@ -1,0 +1,29 @@
+name: Browsers
+
+# Runs the same checks in Firefox and WebKit. Home Assistant is used in all
+# three engines, and the row reaches into ha-slider's shadow DOM, where engines
+# differ: the handle's held styling was keyed on a :has() rule that Firefox
+# matches and gives the right precedence but never restyles the thumb for, so
+# the handle stayed full width there while every Chromium run passed.
+#
+# Swept against Material You only. It is the theme that styles a drag, so it is
+# what the held-handle checks need, and paying for every pack in two more
+# engines buys nothing the Chromium sweep does not already cover.
+#
+# Weekly, like the theme sweep, and an unchanged run is restored rather than
+# re-rendered.
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+jobs:
+  browsers:
+    uses: ./.github/workflows/render.yml
+    with:
+      ha_versions: '["stable"]'
+      browsers: '["firefox", "webkit"]'
+      sweep: true
+      theme_filter: material you
+      artifact_prefix: screenshots-browser

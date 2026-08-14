@@ -25,6 +25,21 @@ on:
         description: Prefix for the uploaded screenshot artifacts
         type: string
         default: screenshots
+      browsers:
+        description: >
+          JSON array of engines to drive. The published screenshots come from
+          Chromium; the others check that the row behaves the same in engines
+          Home Assistant is used in, which is how the handle's held styling was
+          found to depend on a :has() rule Firefox matches but never restyles.
+        type: string
+        default: '["chromium"]'
+      theme_filter:
+        description: >
+          Narrows the sweep to the themes whose names contain one of these
+          comma-separated strings, so a second engine can be checked against the
+          theme that styles the drag without paying for every pack.
+        type: string
+        default: ""
 
 jobs:
   render:
@@ -33,6 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         ha_version: ${{ fromJSON(inputs.ha_versions || '["stable", "beta"]') }}
+        browser: ${{ fromJSON(inputs.browsers || '["chromium"]') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -66,6 +82,8 @@ jobs:
         env:
           SWEEP_THEMES: ${{ inputs.sweep && '1' || '0' }}
           THEME_PINS: ${{ inputs.sweep && 'theme-pins.txt' || '' }}
+          THEME_FILTER: ${{ inputs.theme_filter }}
+          BROWSER: ${{ matrix.browser }}
         run: |
           echo "key=$(tests/render.sh --fingerprint ${{ matrix.ha_version }})" >> "$GITHUB_OUTPUT"
 
@@ -77,17 +95,21 @@ jobs:
             tests/.render-cache
           key: render-${{ steps.fingerprint.outputs.key }}
 
-      - name: Render against Home Assistant ${{ matrix.ha_version }}
+      - name: Render against Home Assistant ${{ matrix.ha_version }} in ${{ matrix.browser }}
         env:
           SWEEP_THEMES: ${{ inputs.sweep && '1' || '0' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           THEME_PINS: ${{ inputs.sweep && 'theme-pins.txt' || '' }}
+          THEME_FILTER: ${{ inputs.theme_filter }}
+          BROWSER: ${{ matrix.browser }}
         run: tests/render.sh ${{ matrix.ha_version }}
 
+      # Chromium keeps the plain name: release.yml downloads it by name, and the
+      # screenshots the README and the releases show are its.
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.artifact_prefix || 'screenshots' }}-${{ matrix.ha_version }}
+          name: ${{ inputs.artifact_prefix || 'screenshots' }}-${{ matrix.ha_version }}${{ matrix.browser == 'chromium' && '' || format('-{0}', matrix.browser) }}
           path: tests/screenshots/
           if-no-files-found: warn

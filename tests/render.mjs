@@ -18,7 +18,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { chromium } from "playwright";
+import { chromium, firefox, webkit } from "playwright";
 
 const HA_URL = process.env.HA_URL ?? "http://ha:8123";
 const HA_VERSION = process.env.HA_VERSION ?? "stable";
@@ -540,7 +540,11 @@ const setPhase = (next) => {
  * Anything outside boot, and anything else during it, is reported in full.
  */
 const KNOWN_BOOT_NOISE = [
+  // Chromium names the property, the other two name the object; Firefox and
+  // WebKit both say _i18n outright, which is the clearest confirmation of what
+  // the minified Chromium message only implies.
   /Cannot read properties of undefined \(reading 'localize'\)/,
+  /this\._i18n/,
 ];
 
 /**
@@ -597,7 +601,23 @@ writeFileSync(
   `${JSON.stringify({ haVersion, haTag: HA_VERSION }, null, 2)}\n`,
 );
 
-const browser = await chromium.launch();
+/**
+ * Which engine to drive. The screenshots the README and the releases show come
+ * from Chromium, and the checks are written against what Home Assistant's own
+ * components do there; the other two are for finding where an engine disagrees —
+ * the handle's held treatment is keyed on a tooltip attribute, and whether that
+ * attribute appears at all is up to the engine.
+ */
+const ENGINES = { chromium, firefox, webkit };
+const BROWSER = process.env.BROWSER ?? "chromium";
+if (!ENGINES[BROWSER]) {
+  console.error(
+    `error: BROWSER must be one of ${Object.keys(ENGINES).join(", ")}`,
+  );
+  process.exit(1);
+}
+if (BROWSER !== "chromium") console.log(`\n==> driving ${BROWSER}`);
+const browser = await ENGINES[BROWSER].launch();
 
 try {
   for (const colorScheme of ["light", "dark"]) {
@@ -1615,7 +1635,48 @@ try {
             const active = await measure();
             await page.mouse.up();
             await page.waitForTimeout(300);
-            dragShape = { idle, active };
+
+            // The same reading from the stock row, so the handle is judged
+            // against what the theme does to Home Assistant's own slider in this
+            // engine rather than against what it does in Chromium. The theme's
+            // rules for the two are the same shape, so where stock narrows ours
+            // should, and where it does not neither should.
+            const stockRow = page.locator("hui-input-number-entity-row").first();
+            const stockMeasure = () =>
+              stockRow.evaluate((el) => {
+                const t = el.shadowRoot
+                  ?.querySelector("ha-slider")
+                  ?.shadowRoot?.querySelector("#thumb");
+                return t
+                  ? {
+                      thumbScale: getComputedStyle(t).scale,
+                      barScale: getComputedStyle(t, "::before").scale,
+                      thumbWidth: t.getBoundingClientRect().width.toFixed(1),
+                    }
+                  : null;
+              });
+            let stock = null;
+            const stockThumb = await stockRow.evaluate((el) => {
+              const node = el.shadowRoot
+                ?.querySelector("ha-slider")
+                ?.shadowRoot?.querySelector("#thumb");
+              const r = node?.getBoundingClientRect();
+              return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+            });
+            if (stockThumb) {
+              const stockIdle = await stockMeasure();
+              await page.mouse.move(stockThumb.x, stockThumb.y);
+              await page.mouse.down();
+              await page.mouse.move(stockThumb.x + 12, stockThumb.y, { steps: 5 });
+              await page.waitForTimeout(400);
+              const stockActive = await stockMeasure();
+              await page.mouse.up();
+              await page.waitForTimeout(300);
+              stock = { idle: stockIdle, active: stockActive };
+            }
+            await restoreValues();
+
+            dragShape = { idle, active, stock };
             console.log(`\ndrag shape: ${JSON.stringify(dragShape)}`);
           }
         }
@@ -1789,12 +1850,24 @@ try {
       );
       // The handle should visibly react to being dragged, as the stock row does.
       if (result.dragShape) {
-        const { idle, active } = result.dragShape;
+        const { idle, active, stock } = result.dragShape;
         expect(
           active.thumbScale !== idle.thumbScale ||
             active.barScale !== idle.barScale,
           `material-you narrows the handle while dragging in ${result.colorScheme} (${idle.thumbScale}/${idle.barScale} -> ${active.thumbScale}/${active.barScale})`,
         );
+        // Against the stock row in this engine rather than against remembered
+        // Chromium numbers: the theme narrows both the same way, and a handle
+        // that only narrows in one engine is what sent this looking in the first
+        // place — the rules were keyed on :has(), which Firefox matches without
+        // ever recomputing the thumb's scale.
+        if (stock) {
+          expect(
+            active.thumbScale === stock.active.thumbScale &&
+              active.barScale === stock.active.barScale,
+            `and narrows it exactly as the stock row does in ${result.colorScheme} (${active.thumbScale}/${active.barScale} vs ${stock.active.thumbScale}/${stock.active.barScale})`,
+          );
+        }
         // The gap animates, so a reading taken mid-transition lands near 4px
         // rather than on it.
         expect(

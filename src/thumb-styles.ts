@@ -69,35 +69,42 @@ const MATERIAL_YOU = `
   /* Dragging: the utilities narrow the handle and tighten the gap while a value
      tooltip is open, keyed on #tooltip — which a range slider does not have,
      since its tooltips are per handle. Same treatment, keyed on the handle
-     actually being dragged. */
-  :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #thumb-min,
-  :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #thumb-max {
+     actually being dragged.
+
+     Keyed on a "held" attribute the card mirrors from those tooltips rather than
+     reading them directly with #slider:has(~ #tooltip-thumb-max[open]). The
+     :has() form matches and takes precedence in every engine, but Firefox never
+     recomputes the thumb's own scale when the tooltip's attribute appears, so
+     the handle kept its full width while the track around it moved in. An
+     attribute on the host invalidates everywhere. */
+  :host([range][held="min"]) #thumb-min,
+  :host([range][held="max"]) #thumb-max {
     scale: 0.66667 1;
   }
   /* Scale, as the utilities do, rather than narrowing the width: the bar sits
      at a fixed inset, so a narrower width moves its centre, where a scale keeps
      it. */
-  :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #thumb-min::before,
-  :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #thumb-max::before {
+  :host([range][held="min"]) #thumb-min::before,
+  :host([range][held="max"]) #thumb-max::before {
     scale: 0.75 1;
   }
 
   /* And the inactive corner shape moves in with it, which is what closes the
      gap around the handle while it is held — the utilities move theirs from
      -18px to -14px. */
-  :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #indicator::before {
+  :host([range][held="min"]) #indicator::before {
     inset-inline-start: -14px !important;
   }
-  :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #indicator::after {
+  :host([range][held="max"]) #indicator::after {
     inset-inline-end: -14px !important;
   }
   /* Only the end being dragged tightens. Closing both left the still handle
      with a 4px gap against a full-width cut-out, showing as a sliver of track
      beside it. */
-  :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #indicator {
+  :host([range][held="min"]) #indicator {
     margin-inline-start: 4px !important;
   }
-  :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #indicator {
+  :host([range][held="max"]) #indicator {
     margin-inline-end: 4px !important;
   }
 

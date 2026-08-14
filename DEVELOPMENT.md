@@ -135,6 +135,15 @@ detached, for attributing a rendering problem to the card or to Home Assistant;
 comparing the two in a state that only exists during a gesture. All three are off by default — they
 double or better the captures a sweep takes and nothing publishes them.
 
+`BROWSER=firefox` or `BROWSER=webkit` drives that engine instead of Chromium, and the
+[Browsers](.github/workflows/browsers.yml) workflow runs both weekly against Material You — the theme
+that styles a drag. The published screenshots stay Chromium's; the point of the others is that the row
+reaches into `ha-slider`'s shadow DOM, where engines differ. The handle's held styling was keyed on
+`#slider:has(~ #tooltip-thumb-max[open])`, which Firefox matches and gives the right precedence but
+never restyles the thumb for, so the handle stayed full width there while every Chromium run passed.
+It is now keyed on a `held` attribute the card mirrors from the tooltips, and the held-handle check
+compares against the stock row in the same engine rather than against remembered Chromium numbers.
+
 Page errors are reported with the step that was running when they were thrown, which is what
 attributes one to the card rather than to Home Assistant's own boot, and `DIAGNOSE_ERRORS=1` adds
 deeper stack frames and matches failed websocket commands back to what was sent. Two Home Assistant

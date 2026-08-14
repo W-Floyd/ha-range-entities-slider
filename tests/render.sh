@@ -90,15 +90,29 @@ cdn_imports() {
 # identified by its remote digest, so a new :stable release invalidates this
 # without anything being pulled.
 fingerprint() {
-  local digest
+  local digest engine_digest playwright_version
   digest="$(docker manifest inspect "$HA_IMAGE" 2>/dev/null | shasum -a 256 | cut -d" " -f1)"
   if [[ -z "$digest" ]]; then
     # Unknown image identity: never claim a run is up to date.
     echo "unknown-$(date +%s)"
     return
   fi
+  # The browser engines matter as much as Home Assistant does — a render is a
+  # measurement of how one of them treats the card. The version is pinned in
+  # tests/Dockerfile, which is hashed below, but the image it names holds the
+  # actual binaries and can be rebuilt under the same tag, so it is identified
+  # by its remote digest for the same reason the Home Assistant image is.
+  playwright_version="$(sed -nE 's/^ARG PLAYWRIGHT_VERSION=(.+)$/\1/p' "$ROOT/tests/Dockerfile" | head -1)"
+  engine_digest="$(docker manifest inspect \
+    "mcr.microsoft.com/playwright:v${playwright_version}-noble" 2>/dev/null |
+    shasum -a 256 | cut -d" " -f1)"
+  if [[ -z "$engine_digest" ]]; then
+    echo "unknown-$(date +%s)"
+    return
+  fi
   {
     echo "$digest"
+    echo "$engine_digest"
     cdn_imports
     echo "sweep=${SWEEP_THEMES:-0} all=${ALL_THEMES:-0} filter=${THEME_FILTER:-}"
     # A theme release changes what the sweep captures, so it has to invalidate
@@ -107,6 +121,9 @@ fingerprint() {
       cat "$theme_pins"
     fi
     echo "strict=${STRICT_THUMBS:-1}/${STRICT_THEMES:-1}"
+    # A different engine draws different screenshots, so it cannot reuse the
+    # ones a previous run left behind.
+    echo "browser=${BROWSER:-chromium}"
     # The sources the card is built from, not the build: the artifact is derived
     # from these, and hashing it would mean building before a fingerprint can be
     # taken — which the caller may only want in order to decide whether to.
@@ -247,6 +264,9 @@ docker run --rm \
   -e DIAGNOSE_ZOOM="${DIAGNOSE_ZOOM:-0}" \
   -e DIAGNOSE_GAP="${DIAGNOSE_GAP:-0}" \
   -e DIAGNOSE_PATCH="${DIAGNOSE_PATCH:-0}" \
+  -e DIAGNOSE_STOCK_DRAG="${DIAGNOSE_STOCK_DRAG:-0}" \
+  -e DIAGNOSE_ERRORS="${DIAGNOSE_ERRORS:-0}" \
+  -e BROWSER="${BROWSER:-chromium}" \
   "$RENDER_IMAGE" node /tests/render.mjs || status=$?
 
 if [[ "$status" != "0" ]]; then
