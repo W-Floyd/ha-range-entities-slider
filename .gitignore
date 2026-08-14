@@ -10,3 +10,6 @@ ha-range-entities-slider.js
 # Cached theme tarballs, and the stamps recording what was last rendered.
 tests/.theme-cache/
 tests/.render-cache/
+
+# Per-machine tool permissions.
+.claude/settings.local.json

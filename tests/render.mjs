@@ -302,6 +302,35 @@ const HANDLE_PROBE = (el) => {
  */
 let DRAG_RESET_TOKEN = "";
 
+/**
+ * The captures and the drag tests move handles, which writes to the entities.
+ * Nothing should be able to tell afterwards: the dashboard is documented by its
+ * values, and a capture that left them changed would drift every run.
+ */
+const DOCUMENTED_VALUES = {
+  "input_number.drag_low": 18,
+  "input_number.drag_high": 24,
+  "input_number.lower_temp": 18,
+  "input_number.upper_temp": 24,
+  "input_number.narrow_low": 16,
+  "input_number.narrow_high": 28,
+};
+
+async function restoreValues() {
+  await Promise.all(
+    Object.entries(DOCUMENTED_VALUES).map(([entity_id, value]) =>
+      fetch(`${HA_URL}/api/services/input_number/set_value`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${DRAG_RESET_TOKEN}`,
+        },
+        body: JSON.stringify({ entity_id, value }),
+      }),
+    ),
+  );
+}
+
 async function captureOverview(page, file) {
   // Home Assistant raises a "started" toast on boot which would otherwise sit
   // across the bottom of every capture.
@@ -343,7 +372,10 @@ async function captureOverview(page, file) {
     if (dragFrom) {
       await page.mouse.move(dragFrom.x, dragFrom.y);
       await page.mouse.down();
-      await page.mouse.move(dragFrom.x + 18, dragFrom.y, { steps: 6 });
+      // A single pixel: enough to raise the popup and the theme's held styling,
+      // too little to cross a step, so the capture still shows the documented
+      // value and the entity is never actually written.
+      await page.mouse.move(dragFrom.x + 1, dragFrom.y, { steps: 2 });
       await page.waitForTimeout(400);
     }
   }
@@ -365,27 +397,49 @@ async function captureOverview(page, file) {
     : undefined;
   await page.screenshot({ path: file, clip });
 
+  // The same capture with a stock row held mid-drag instead, so the two can be
+  // compared in the state that only exists during a gesture. Nothing publishes
+  // these — they are for diffing ours against stock while working on the handle
+  // styling — and they double the number of captures a sweep takes, so they are
+  // opt-in rather than something CI spends its time on.
+  if (dragFrom && process.env.DIAGNOSE_STOCK_DRAG === "1") {
+    await page.mouse.move(dragFrom.x, dragFrom.y, { steps: 4 });
+    await page.mouse.up();
+    const stockThumb = await page
+      .locator("hui-input-number-entity-row")
+      .first()
+      .evaluate((el) => {
+        const node = el.shadowRoot
+          ?.querySelector("ha-slider")
+          ?.shadowRoot?.querySelector("#thumb");
+        const r = node?.getBoundingClientRect();
+        return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+      })
+      .catch(() => null);
+    if (stockThumb) {
+      await page.mouse.move(stockThumb.x, stockThumb.y);
+      await page.mouse.down();
+      await page.mouse.move(stockThumb.x + 1, stockThumb.y, { steps: 2 });
+      await page.waitForTimeout(400);
+      await page.screenshot({
+        path: file.replace(/\.png$/, "-stock-drag.png"),
+        clip,
+      });
+      await page.mouse.move(stockThumb.x, stockThumb.y, { steps: 6 });
+      await page.mouse.up();
+      await restoreValues();
+      await page.waitForTimeout(300);
+    }
+    await page.mouse.move(dragFrom.x, dragFrom.y);
+    await page.mouse.down();
+  }
+
   if (dragFrom) {
     await page.mouse.move(dragFrom.x, dragFrom.y, { steps: 6 });
     await page.mouse.up();
     // The handle narrows under some themes while it is being dragged, so the
-    // pointer landing back where it started does not put the value back. Reset
-    // explicitly, or each capture starts from where the last one left off.
-    await Promise.all(
-      [
-        ["input_number.drag_low", 18],
-        ["input_number.drag_high", 24],
-      ].map(([entity_id, value]) =>
-        fetch(`${HA_URL}/api/services/input_number/set_value`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${DRAG_RESET_TOKEN}`,
-          },
-          body: JSON.stringify({ entity_id, value }),
-        }),
-      ),
-    );
+    // pointer landing back where it started does not put the value back.
+    await restoreValues();
     await page.waitForTimeout(300);
   }
 }
@@ -451,11 +505,14 @@ try {
     );
 
     const page = await context.newPage();
-    page.on("pageerror", (error) =>
+    page.on("pageerror", (error) => {
+      // The first stack frame says which component threw, which a bare message
+      // does not.
+      const frame = (error?.stack ?? "").split("\n")[1]?.trim() ?? "";
       warnings.push(
-        `page error: ${error?.message || error?.stack || JSON.stringify(error)}`,
-      ),
-    );
+        `page error: ${error?.message || JSON.stringify(error)}${frame ? ` (${frame})` : ""}`,
+      );
+    });
 
     await page.goto(`${HA_URL}/lovelace/0`, { waitUntil: "domcontentloaded" });
 
@@ -986,6 +1043,34 @@ try {
         const after = await popupState();
         console.log(`popup while dragging: ${JSON.stringify(during)}`);
 
+        // The popup should be styled like the stock row's, which under a theme
+        // that restyles tooltips means the theme's own treatment rather than
+        // Home Assistant's default.
+        const readPopup = (el, id) => {
+          const tip = el.shadowRoot
+            ?.querySelector("ha-slider")
+            ?.shadowRoot?.querySelector(`#${id}`);
+          const part = tip?.shadowRoot?.querySelector('[part~="body"]');
+          if (!part) return null;
+          const style = getComputedStyle(part);
+          return {
+            background: style.backgroundColor,
+            color: style.color,
+            radius: style.borderRadius,
+          };
+        };
+        const popupStyle = {
+          ours: await row.evaluate(
+            (el, src) => eval(src)(el, "tooltip-thumb-max"),
+            readPopup.toString(),
+          ),
+          stock: await stockRow.evaluate(
+            (el, src) => eval(src)(el, "tooltip"),
+            readPopup.toString(),
+          ),
+        };
+        console.log(`popup style: ${JSON.stringify(popupStyle)}`);
+
         const dragged = during.find((t) => t.id === "tooltip-thumb-max");
         const idle = during.find((t) => t.id === "tooltip-thumb-min");
         expect(
@@ -1044,18 +1129,9 @@ try {
           );
         }
 
-        // Put them back so the screenshots below are the documented values.
-        await fetch(`${HA_URL}/api/services/input_number/set_value`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            entity_id: "input_number.lower_temp",
-            value: 18,
-          }),
-        });
+        // Put every dragged entity back, so the captures below show the
+        // documented values rather than wherever the tests left the handles.
+        await restoreValues();
         await page.waitForTimeout(500);
       }
 
@@ -1145,6 +1221,23 @@ try {
     `the captures leave the drag row as they found it (${dragState.join("/")})`,
   );
 
+  // Nothing the run does to a handle should outlive it.
+  const drifted = [];
+  for (const [entity, expected] of Object.entries(DOCUMENTED_VALUES)) {
+    const state = await (
+      await fetch(`${HA_URL}/api/states/${entity}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).json();
+    if (parseFloat(state.state) !== expected) {
+      drifted.push(`${entity}=${state.state} (expected ${expected})`);
+    }
+  }
+  expect(
+    drifted.length === 0,
+    `dragging for the tests and captures leaves every value as documented${drifted.length ? `: ${drifted.join(", ")}` : ""}`,
+  );
+
   if (SWEEP_THEMES) {
     const installed = (await getThemes(token)).filter(
       ({ name }) => !EXCLUDED_THEMES.test(name),
@@ -1191,17 +1284,24 @@ try {
     // relabel the row.
     const markStatic = (theme) => {
       const slug = theme.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      let renamed = false;
       for (const extra of ["", "-nopatch"]) {
         const from = `${themeDir}/${slug}-light${extra}.png`;
         const to = `${themeDir}/${slug}${extra}.png`;
-        // Do not claim a name another theme already holds: "Graphite" would
-        // otherwise take the file "Graphite Light" wrote.
-        if (existsSync(from) && !existsSync(to)) renameSync(from, to);
+        // Do not claim a name another theme already holds: "Frosted Glass Dark"
+        // would otherwise take the file "Frosted Glass" wrote for its dark mode.
+        if (existsSync(from) && !existsSync(to)) {
+          renameSync(from, to);
+          if (!extra) renamed = true;
+        }
       }
       const row = results.find((r) => r.theme === theme);
       if (row) {
         row.colorScheme = "static";
-        if (existsSync(`${themeDir}/${slug}.png`)) row.file = `${slug}.png`;
+        // Only follow the rename that actually happened. Checking the target
+        // exists is not the same question: it may be another theme's capture,
+        // which had this row pointing at someone else's screenshot.
+        if (renamed) row.file = `${slug}.png`;
       }
     };
 
@@ -1294,12 +1394,17 @@ try {
                   ?.querySelector("ha-slider")?.shadowRoot;
                 const t = shadow?.querySelector("#thumb-max");
                 const i = shadow?.querySelector("#indicator");
+                const r = t?.getBoundingClientRect();
                 return {
                   thumbScale: t ? getComputedStyle(t).scale : null,
                   barScale: t ? getComputedStyle(t, "::before").scale : null,
                   indicatorMargin: i
                     ? getComputedStyle(i).marginInlineEnd
                     : null,
+                  cornerInset: i
+                    ? getComputedStyle(i, "::after").insetInlineEnd
+                    : null,
+                  thumbWidth: r ? r.width.toFixed(1) : null,
                 };
               });
             const idle = await measure();
@@ -1400,6 +1505,38 @@ try {
             });
           }
 
+          // The same crops with the handle held, which is the state a theme
+          // animates and the only way to compare our drag treatment with the
+          // stock row's rather than guess at it.
+          for (const [label, locator, thumbSel] of [
+            ["ours-max", zoomRow, "#thumb-max"],
+            ["stock", zoomStock, "#thumb"],
+          ]) {
+            const clip = boxes[label];
+            const at = await locator.evaluate((el, sel) => {
+              const node = el.shadowRoot
+                ?.querySelector("ha-slider")
+                ?.shadowRoot?.querySelector(sel);
+              const r = node?.getBoundingClientRect();
+              return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null;
+            }, thumbSel);
+            if (!clip || !at) continue;
+            await zoomPage.mouse.move(at.x, at.y);
+            await zoomPage.mouse.down();
+            // Barely move: enough to open the popup and trigger the theme's
+            // active state without shifting the handle out of the crop.
+            await zoomPage.mouse.move(at.x + 1, at.y, { steps: 2 });
+            await zoomPage.waitForTimeout(500);
+            await zoomPage.screenshot({
+              path: `${themeDir}/zoom-${label}-${colorScheme}-held.png`,
+              clip,
+            });
+            await zoomPage.mouse.move(at.x, at.y, { steps: 2 });
+            await zoomPage.mouse.up();
+            await zoomPage.waitForTimeout(200);
+          }
+          await restoreValues();
+
           await zoomContext.close();
         }
 
@@ -1457,6 +1594,13 @@ try {
           Math.abs(parseFloat(active.indicatorMargin) - 4) < 0.5,
           `and tightens the gap to it in ${result.colorScheme} (${active.indicatorMargin})`,
         );
+        // The inactive side has to come in with it, or the handle sits in a gap
+        // that is tight on one side and wide on the other. The theme's own rule
+        // for this loses to the base one without !important.
+        expect(
+          Math.abs(parseFloat(active.cornerInset) + 14) < 0.5,
+          `and the inactive corner comes in with it in ${result.colorScheme} (${active.cornerInset}, idle ${idle.cornerInset})`,
+        );
       }
 
       // Without the gap the thumb's negative rect covers that rounded end.
@@ -1479,6 +1623,16 @@ try {
         null,
         2,
       )}\n`,
+    );
+
+    const claimed = new Map();
+    for (const row of results.filter((r) => r.file && !r.error)) {
+      claimed.set(row.file, [...(claimed.get(row.file) ?? []), row.theme]);
+    }
+    const shared = [...claimed.entries()].filter(([, owners]) => owners.length > 1);
+    expect(
+      shared.length === 0,
+      `each capture belongs to one theme${shared.length ? `: ${shared.map(([f, o]) => `${f} claimed by ${o.join(" and ")}`).join("; ")}` : ""}`,
     );
 
     if (skipped.length) {

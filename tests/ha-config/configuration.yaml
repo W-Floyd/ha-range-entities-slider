@@ -2,9 +2,10 @@
 # This directory is copied to a temp dir before each run, so Home Assistant's
 # generated .storage never lands in the repo.
 
-frontend:
-  # Empty when the theme sweep is off; populated by tests/install-themes.sh.
-  themes: !include_dir_merge_named themes
+# Written by tests/render.sh: the themes directory, plus extra_module_url when
+# the sweep has modules to load — an empty !include is None, which fails config
+# validation and takes the whole frontend down with it.
+frontend: !include frontend.yaml
 
 # ha-lcars reads these exact entity ids from its card-mod templates and
 # interpolates them straight into CSS — the numbers are pixel sizes, the toggles

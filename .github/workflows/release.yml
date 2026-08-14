@@ -50,15 +50,24 @@ jobs:
       - name: Build the card
         run: tools/build.sh
 
-      # Release assets are a flat namespace, so the theme captures are prefixed
-      # rather than relying on their directory to keep them distinct.
+      # Only what the notes actually link to. The same run also records
+      # comparison and diagnostic crops — a stock row held mid-drag, magnified
+      # handles, the card with its styling detached — which exist to be diffed
+      # against during development, not attached to a release. The theme
+      # captures come from the sweep's manifest for that reason, and are
+      # prefixed because release assets are a flat namespace.
       - name: Collect the screenshots
         run: |
           mkdir -p upload
-          cp tests/screenshots/*.png upload/
-          for file in tests/screenshots/themes/*.png; do
-            cp "$file" "upload/theme-$(basename "$file")"
+          for file in tests/screenshots/overview-*-light.png tests/screenshots/overview-*-dark.png; do
+            cp "$file" upload/
           done
+          node -e '
+            const {readFileSync, copyFileSync} = require("node:fs");
+            for (const {file} of JSON.parse(readFileSync("tests/screenshots/themes/manifest.json", "utf8"))) {
+              copyFileSync(`tests/screenshots/themes/${file}`, `upload/theme-${file}`);
+            }
+          '
           ls -la upload
 
       - name: Compose the release notes

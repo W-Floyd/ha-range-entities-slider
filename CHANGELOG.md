@@ -10,6 +10,37 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ## [Unreleased]
 
+### Fixed
+
+- Material You draws the gap through the track behind both handles again. Its
+  utilities style the slider from a module the frontend loads itself, so serving
+  ha-lcars' `lcars.js` as a global dashboard resource had been overriding them
+  for every theme, stock included; theme scripts that are only meant for their
+  own theme are now scoped to it, and the Material You module is registered
+  through `frontend.extra_module_url` as its README specifies.
+- A handle held mid-drag narrows towards its own centre rather than drifting
+  left, and the gap around it tightens instead of widening. Both now mirror the
+  utilities exactly — a fixed 4px inset with a scale, and the inactive track's
+  inner corner moving in to `-14px` — rather than approximating with a width and
+  a transform that compounded with the parent's.
+- The value popup on a dragged handle takes the theme's own styling. A range
+  slider raises one popup per handle, so the utilities' `#tooltip` rule missed
+  them and they fell back to the frontend default while the stock row beside
+  them showed the theme's.
+
+### Changed
+
+- Release notes show each screenshot as a `<picture>` that follows the reader's
+  system theme, as the README does, and lay the themes out two to a row so the
+  gallery is not a long scroll.
+- The render no longer captures a stock row held mid-drag beside every one of
+  ours unless asked for (`DIAGNOSE_STOCK_DRAG=1`), which halves the captures a
+  theme sweep takes. It is a development aid for comparing the two mid-gesture,
+  like the existing zoom and unpatched captures, and CI was spending a drag and
+  a screenshot per theme and mode on it.
+- Releases carry only the screenshots their notes link to, taken from the
+  sweep's manifest, so development captures cannot end up attached as assets.
+
 ## [1.0.0] - 2026-08-13
 
 ### Added

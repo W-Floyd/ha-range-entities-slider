@@ -50,7 +50,13 @@ THEMES=(
   # LCARS ships its themes flattened into one file outside themes/, and its
   # README requires both a script and a font stylesheet as resources. Antonio is
   # the Google Fonts option; the alternative, Tungsten, is not redistributable.
-  "th3jesta/ha-lcars|theme_flat/lcars_flat.yaml|lcars.js>js,https://fonts.googleapis.com/css2?family=Antonio:wght@400;700&display=swap>css"
+  #
+  # Both are marked !scoped: lcars.js restyles the frontend globally, and a
+  # dashboard resource is loaded whatever theme is active, so leaving it on
+  # rewrote how every other theme drew its sliders — Material You lost the
+  # cutout either side of its handles, on stock rows as much as ours. Scoped
+  # resources load only when that pack's themes are the ones being rendered.
+  "th3jesta/ha-lcars|theme_flat/lcars_flat.yaml|lcars.js>js!scoped,https://fonts.googleapis.com/css2?family=Antonio:wght@400;700&display=swap>css!scoped"
   # Both need only card-mod, which is already first in this list. Pip-Boy pulls
   # its own font in with an @import inside the theme, so it needs no resource.
   "wessamlauf/homeassistant-frosted-glass-themes||"
@@ -92,6 +98,7 @@ fi
 
 failed=0
 : >"$target/theme-versions.txt"
+# url, type, scope, repo — the caller decides what a scoped resource means.
 : >"$target/theme-resources.txt"
 
 for entry in "${THEMES[@]}"; do
@@ -162,13 +169,19 @@ for entry in "${THEMES[@]}"; do
     for item in "${wanted[@]}"; do
       path="${item%%>*}"
       type="${item##*>}"
+      scope=global
+      if [[ "$type" == *"!scoped" ]]; then
+        type="${type%!scoped}"
+        scope=scoped
+      fi
       if [[ "$path" == http* ]]; then
-        echo "${path} ${type}" >>"$target/theme-resources.txt"
-        echo "    resource ${type}: ${path:0:48}…"
+        echo "${path} ${type} ${scope} ${repo}" >>"$target/theme-resources.txt"
+        echo "    resource ${type} (${scope}): ${path:0:40}…"
       elif [[ -f "$tmp/$path" ]]; then
         cp "$tmp/$path" "$target/www/"
-        echo "/local/$(basename "$path") ${type}" >>"$target/theme-resources.txt"
-        echo "    resource ${type}: $(basename "$path")"
+        echo "/local/$(basename "$path") ${type} ${scope} ${repo}" \
+          >>"$target/theme-resources.txt"
+        echo "    resource ${type} (${scope}): $(basename "$path")"
       else
         echo "    warning: no ${path} in ${repo}" >&2
         failed=$((failed + 1))

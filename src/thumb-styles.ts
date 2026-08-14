@@ -19,6 +19,10 @@ const MATERIAL_YOU = `
   :host([range]) #thumb-max {
     overflow: visible;
     background: var(--ha-slider-thumb-negative-color);
+    /* Range thumbs carry a 1px border the single thumb does not. Insets are
+       measured inside it, so the bar sat 5px from one edge and 3px from the
+       other — off centre whether or not it was being dragged. */
+    border: none;
     /* The stock thumb is a square-cornered rectangle in this colour: it punches
        the gap through the track either side of the handle. Rounding it here
        curves the gap inwards, which reads as the neighbouring segments being
@@ -28,6 +32,11 @@ const MATERIAL_YOU = `
       width var(--md-sys-motion-expressive-spatial-default),
       left var(--md-sys-motion-expressive-spatial-default);
   }
+  /* Positioned exactly as the utilities position the single thumb's bar: a
+     fixed 4px inset inside a 12px thumb, which centres it without a transform.
+     Using left: 50% with translateX(-50%) instead put a transform on the bar
+     that compounded with the thumb's own when either was scaled, walking the
+     bar off centre. */
   :host([range]) #thumb-min::before,
   :host([range]) #thumb-max::before {
     content: '';
@@ -35,10 +44,12 @@ const MATERIAL_YOU = `
     height: var(--thumb-actual-height);
     width: 4px;
     top: calc(-0.5 * (var(--thumb-actual-height) - var(--ha-slider-track-size)));
-    left: 50%;
-    transform: translateX(-50%);
+    inset-inline-start: 4px;
     border-radius: var(--md-sys-shape-corner-full);
-    background: var(--md-sys-color-primary);
+    background: var(
+      --ha-slider-thumb-color,
+      var(--ha-slider-indicator-color, var(--md-sys-color-primary))
+    );
   }
 
   /* material-you-utilities styles a single #thumb and never the range pair, so
@@ -63,13 +74,31 @@ const MATERIAL_YOU = `
   :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #thumb-max {
     scale: 0.66667 1;
   }
+  /* Scale, as the utilities do, rather than narrowing the width: the bar sits
+     at a fixed inset, so a narrower width moves its centre, where a scale keeps
+     it. */
   :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #thumb-min::before,
   :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #thumb-max::before {
     scale: 0.75 1;
   }
-  :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #indicator,
+
+  /* And the inactive corner shape moves in with it, which is what closes the
+     gap around the handle while it is held — the utilities move theirs from
+     -18px to -14px. */
+  :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #indicator::before {
+    inset-inline-start: -14px !important;
+  }
+  :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #indicator::after {
+    inset-inline-end: -14px !important;
+  }
+  /* Only the end being dragged tightens. Closing both left the still handle
+     with a 4px gap against a full-width cut-out, showing as a sliver of track
+     beside it. */
+  :host([range]) #slider:has(~ #tooltip-thumb-min[open]) #indicator {
+    margin-inline-start: 4px !important;
+  }
   :host([range]) #slider:has(~ #tooltip-thumb-max[open]) #indicator {
-    margin-inline: 4px !important;
+    margin-inline-end: 4px !important;
   }
 
   /* With both handles on the same value the active track has no width, so the
@@ -81,6 +110,22 @@ const MATERIAL_YOU = `
   :host([range][collapsed]) #indicator::before,
   :host([range][collapsed]) #indicator::after {
     display: none !important;
+  }
+
+  /* The value popup. The utilities style #tooltip::part(body); a range slider
+     raises one popup per handle, so ours went unstyled and fell back to Home
+     Assistant's default while the stock row got the theme's. */
+  :host([range]) #tooltip-thumb-min::part(body),
+  :host([range]) #tooltip-thumb-max::part(body) {
+    background-color: var(--md-sys-color-inverse-surface);
+    color: var(--md-sys-color-inverse-on-surface);
+    border-radius: var(--md-sys-shape-corner-full);
+    padding: 12px 16px;
+    translate: 0 -6px;
+    font-size: var(--md-sys-typescale-label-large-size);
+    font-weight: var(--md-sys-typescale-label-large-weight);
+    line-height: var(--md-sys-typescale-label-large-line-height);
+    letter-spacing: var(--md-sys-typescale-label-large-tracking);
   }
 
   /* The utilities' own ::after shapes the right-hand inner corner; this is the

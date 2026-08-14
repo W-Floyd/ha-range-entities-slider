@@ -119,7 +119,10 @@ unconditionally, and now branches on whether that theme is active.
 
 `DIAGNOSE_ZOOM=1` adds magnified crops of our handle and the stock one, which is how the handle
 sizing and corner bugs were found; `DIAGNOSE_PATCH=1` adds a capture with the card's shadow-DOM patch
-detached, for attributing a rendering problem to the card or to Home Assistant.
+detached, for attributing a rendering problem to the card or to Home Assistant;
+`DIAGNOSE_STOCK_DRAG=1` repeats every capture with a stock row held mid-drag instead of ours, for
+comparing the two in a state that only exists during a gesture. All three are off by default — they
+double or better the captures a sweep takes and nothing publishes them.
 
 ## Continuous integration
 

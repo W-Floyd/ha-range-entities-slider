@@ -170,6 +170,8 @@ mkdir -p "$workdir/www" "$workdir/themes" "$OUT_DIR"
 cp "$ROOT/ha-range-entities-slider.js" "$workdir/www/"
 
 : >"$workdir/resources.yaml"
+: >"$workdir/modules.txt"
+printf -- 'themes: !include_dir_merge_named themes\n' >"$workdir/frontend.yaml"
 
 if [[ "${SWEEP_THEMES:-0}" == "1" ]]; then
   "$ROOT/tests/install-themes.sh" "$workdir"
@@ -179,10 +181,38 @@ if [[ "${SWEEP_THEMES:-0}" == "1" ]]; then
   # Whatever the packs asked for, in the order they declared it: card-mod first,
   # since themes that use card-mod-theme keys need it loaded before their styles
   # can apply.
-  while read -r url type; do
+  #
+  # Modules go in frontend.extra_module_url rather than the dashboard resources,
+  # which is what card-mod's and material-you-utilities' own instructions say:
+  # loaded that way they are in place before a theme is applied, where a
+  # dashboard resource arrives after it.
+  #
+  # A scoped resource is one that restyles the frontend whatever theme is set —
+  # lcars.js does — so it is left out unless this run is rendering that pack's
+  # themes, or it would rewrite every other theme's rendering.
+  while read -r url type scope repo; do
     [[ -n "$url" ]] || continue
-    printf -- '- url: %s\n  type: %s\n' "$url" "$type" >>"$workdir/resources.yaml"
+    if [[ "$scope" == "scoped" ]]; then
+      pack="${repo##*/}"
+      if [[ "${ALL_THEMES:-0}" != "1" ]] &&
+        ! grep -qi "${pack#ha-}" <<<"${THEME_FILTER:-}"; then
+        echo "    skipping ${url##*/} (${repo} only)"
+        continue
+      fi
+    fi
+    if [[ "$type" == "module" ]]; then
+      printf -- '%s\n' "$url" >>"$workdir/modules.txt"
+    else
+      printf -- '- url: %s\n  type: %s\n' "$url" "$type" >>"$workdir/resources.yaml"
+    fi
   done <"$workdir/theme-resources.txt"
+fi
+
+# Only write the key when there is something to put under it: an empty
+# extra_module_url fails config validation and takes the frontend down.
+if [[ -s "$workdir/modules.txt" ]]; then
+  printf -- 'extra_module_url:\n' >>"$workdir/frontend.yaml"
+  sed 's/^/  - /' "$workdir/modules.txt" >>"$workdir/frontend.yaml"
 fi
 
 printf -- '- url: /local/ha-range-entities-slider.js\n  type: module\n' >>"$workdir/resources.yaml"
