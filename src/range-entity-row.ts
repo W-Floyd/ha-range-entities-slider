@@ -342,6 +342,11 @@ export class RangeEntityRow extends LitElement {
         const sliderShadow = slider.shadowRoot;
         if (!sliderShadow) return;
 
+        // Before the variant check below, which returns early once the styling
+        // is in place: the tracking has to be set up whether or not this pass
+        // is the one that writes the stylesheet.
+        this._trackHeldHandle(slider, sliderShadow);
+
         // The theme can change while the card is live, so the variant is
         // recorded and the style replaced when it no longer matches.
         const materialYou = !!getComputedStyle(this)
@@ -360,8 +365,6 @@ export class RangeEntityRow extends LitElement {
         style.dataset["variant"] = variant;
         style.textContent = thumbCss(materialYou);
         sliderShadow.appendChild(style);
-
-        this._trackHeldHandle(slider, sliderShadow);
       }, 50);
     } catch (error) {
       console.debug("Could not style the range slider thumbs:", error);
@@ -379,33 +382,34 @@ export class RangeEntityRow extends LitElement {
    * engine never recomputes the thumb's own `scale` when the tooltip's attribute
    * appears, so the handle keeps its full width until something unrelated forces
    * a restyle. An attribute on the host invalidates everywhere.
+   *
+   * Watches the whole slider shadow root for the `open` attribute rather than the
+   * two tooltip elements themselves, so it does not matter whether they have been
+   * rendered yet: the first attempt looked them up and gave up when they were
+   * missing, which on a slower machine meant no tracking at all and a handle that
+   * never narrowed. `open` is the only attribute filtered, so the inline styles
+   * Home Assistant writes while dragging do not wake it.
    */
   private _heldObserver?: MutationObserver;
 
   private _trackHeldHandle(slider: Element, sliderShadow: ShadowRoot): void {
-    this._heldObserver?.disconnect();
-
-    const tooltips = ["min", "max"].map((end) => ({
-      end,
-      node: sliderShadow.querySelector(`#tooltip-thumb-${end}`),
-    }));
-    if (!tooltips.some(({ node }) => node)) return;
+    if (this._heldObserver) return;
 
     const sync = () => {
-      const held = tooltips.find(({ node }) => node?.hasAttribute("open"));
-      if (held) slider.setAttribute("held", held.end);
+      const held = (["min", "max"] as const).find((end) =>
+        sliderShadow.querySelector(`#tooltip-thumb-${end}[open]`),
+      );
+      if (held) slider.setAttribute("held", held);
       else slider.removeAttribute("held");
     };
 
     this._heldObserver = new MutationObserver(sync);
-    for (const { node } of tooltips) {
-      if (node) {
-        this._heldObserver.observe(node, {
-          attributes: true,
-          attributeFilter: ["open"],
-        });
-      }
-    }
+    this._heldObserver.observe(sliderShadow, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["open"],
+    });
     sync();
   }
 

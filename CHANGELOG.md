@@ -10,6 +10,27 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ## [Unreleased]
 
+### Fixed
+
+- The held-handle styling is applied reliably rather than only when the value
+  tooltips happen to exist already. 1.0.2 set up the mirror that drives it in the
+  pass that writes the stylesheet, looked the two tooltips up once, and gave up if
+  they were missing — so on a slower machine no handle ever narrowed while
+  dragging. It now watches the slider's shadow root for the `open` attribute,
+  which does not care when the tooltips appear.
+
+### Added
+
+- The render checks that the dragged handle is mirrored onto the slider, and that
+  the mark is dropped when the drag ends. Both are theme-independent, so a missing
+  mirror fails the ordinary run rather than only the Material You sweep — which is
+  how 1.0.2's defect reached a release.
+- The render waits for Home Assistant to report `RUNNING`, and for the entities
+  the checks read to hold a usable value, before loading the dashboard. The
+  template `number` entities are computed from helpers and publish `unknown` until
+  those restore, which had two checks reading the unavailable fallback in CI while
+  every local run passed.
+
 ## [1.0.2] - 2026-08-14
 
 ### Fixed

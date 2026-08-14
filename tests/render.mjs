@@ -595,6 +595,73 @@ const config = await (
 const haVersion = config?.version ?? "unknown";
 console.log(`==> Home Assistant ${haVersion} (tag: ${HA_VERSION})`);
 
+/**
+ * Waits for Home Assistant to say it has finished starting.
+ *
+ * Serving the frontend is not the same as being up: /api/config reports a state
+ * of STARTING until the start event fires, and integrations are still setting up
+ * inside that window. Waiting for RUNNING is Home Assistant's own signal for it.
+ */
+async function waitForRunning(timeoutMs = 300_000) {
+  const deadline = Date.now() + timeoutMs;
+  let state = "unknown";
+  while (Date.now() < deadline) {
+    const response = await fetch(`${HA_URL}/api/config`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.ok) {
+      ({ state } = await response.json());
+      if (state === "RUNNING") return state;
+    }
+    await sleep(1000);
+  }
+  warnings.push(`Home Assistant never reported RUNNING (last: ${state})`);
+  return state;
+}
+
+/**
+ * Waits for the entities the checks read to hold a usable value.
+ *
+ * RUNNING covers the integrations, but the template `number` entities are
+ * computed from input_number helpers and publish `unknown` until those have
+ * restored — so this stays as a targeted guard on the states a check actually
+ * reads. A run that loaded the dashboard inside that window read the unavailable
+ * fallback instead: a partner value of "—" and a slider spanning 0/100, which
+ * reproduced in CI and not locally, the shape of a startup race.
+ */
+async function waitForEntities(ids, timeoutMs = 60_000) {
+  const deadline = Date.now() + timeoutMs;
+  const pending = new Set(ids);
+  while (pending.size && Date.now() < deadline) {
+    for (const id of [...pending]) {
+      const response = await fetch(`${HA_URL}/api/states/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const { state } = await response.json();
+        if (Number.isFinite(parseFloat(state))) pending.delete(id);
+      }
+    }
+    if (pending.size) await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  if (pending.size) {
+    warnings.push(
+      `entities never became usable: ${[...pending].join(", ")}`,
+    );
+  }
+}
+
+console.log(`==> Home Assistant reports ${await waitForRunning()}`);
+
+// Only the ones a check reads a value from. number.number_offline is
+// deliberately unavailable and never resolves.
+await waitForEntities([
+  "number.number_low",
+  "number.number_high",
+  "input_number.lower_temp",
+  "input_number.upper_temp",
+]);
+
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(
   `${OUT_DIR}/render-info.json`,
@@ -1238,6 +1305,21 @@ try {
         await page.mouse.move(maxThumb.x + 20, maxThumb.y, { steps: 6 });
         await page.waitForTimeout(400);
         const during = await popupState();
+        // The card mirrors the held handle onto the slider, which is what the
+        // theme's held styling keys on. Checked here rather than only in the
+        // Material You sweep: this is what tells a missing mirror from a theme
+        // rule that did not match, and the first version of the mirror attached
+        // only if the tooltips already existed, so it went missing on a slower
+        // machine while every local run passed.
+        const heldAttr = await row.evaluate(
+          (el) =>
+            el.shadowRoot?.querySelector("ha-slider")?.getAttribute("held") ??
+            null,
+        );
+        expect(
+          heldAttr === "max",
+          `the dragged handle is mirrored onto the slider (held=${heldAttr})`,
+        );
         await page.mouse.up();
         await page.waitForTimeout(400);
         const after = await popupState();
@@ -1288,6 +1370,15 @@ try {
         expect(
           after.every((t) => !t.open),
           "the popup closes when the drag ends",
+        );
+        const heldAfter = await row.evaluate(
+          (el) =>
+            el.shadowRoot?.querySelector("ha-slider")?.getAttribute("held") ??
+            null,
+        );
+        expect(
+          heldAfter === null,
+          `and the slider stops being marked as held (held=${heldAfter})`,
         );
       }
 
