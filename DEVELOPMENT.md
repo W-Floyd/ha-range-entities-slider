@@ -124,6 +124,15 @@ detached, for attributing a rendering problem to the card or to Home Assistant;
 comparing the two in a state that only exists during a gesture. All three are off by default — they
 double or better the captures a sweep takes and nothing publishes them.
 
+Page errors are reported with the step that was running when they were thrown, which is what
+attributes one to the card rather than to Home Assistant's own boot, and `DIAGNOSE_ERRORS=1` adds
+deeper stack frames and matches failed websocket commands back to what was sent. Two Home Assistant
+errors are known and counted rather than listed: `ha-entity-picker` reads `this._i18n.localize`
+unguarded in `render()`, and `_i18n` is a Lit context it consumes rather than a property it is
+passed, so its first render can beat the provider on `<home-assistant>`; and a websocket command the
+frontend sends that this build's backend does not implement rejects with a bare object. Neither
+involves this card — see `KNOWN_NOISE` in [render.mjs](tests/render.mjs).
+
 ## Continuous integration
 
 [render.yml](.github/workflows/render.yml) holds the render and is called by the workflows behind the

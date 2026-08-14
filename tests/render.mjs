@@ -447,6 +447,59 @@ async function captureOverview(page, file) {
 const failures = [];
 const warnings = [];
 
+// Warnings are reported together at the end, so a page error on its own says
+// nothing about what the page was doing when it threw. This says which step
+// was in progress, which is how an error is attributed to the card rather than
+// to Home Assistant's own boot.
+let phase = "boot";
+const setPhase = (next) => {
+  phase = next;
+};
+
+/**
+ * Errors Home Assistant throws at itself while the page comes up, which are
+ * reported as a count rather than one line each so a real error from the card
+ * cannot hide among them. Both were traced to the frontend's own code:
+ *
+ * - ha-entity-picker's render() reads this._i18n.localize unguarded, and _i18n
+ *   is a Lit context it consumes rather than a property it is passed, so its
+ *   first render can land before the provider on <home-assistant> answers.
+ *   Two fire per page load, from pickers Home Assistant mounts itself.
+ * - a websocket command this build's backend does not implement, rejecting with
+ *   "Unknown command."
+ *
+ * Anything outside boot, and anything else during it, is reported in full.
+ */
+const KNOWN_BOOT_NOISE = [
+  /Cannot read properties of undefined \(reading 'localize'\)/,
+];
+
+/**
+ * The same, but not tied to boot: a websocket command the frontend sends that
+ * this build's backend does not implement, which rejects with an object rather
+ * than an Error. It settles whenever the response arrives, so it lands in
+ * whichever step happens to be running. Playwright reports it twice — once as a
+ * page error whose message is the useless "Object", and once through the
+ * serialiser above — so both shapes are matched. Which command it is went
+ * unidentified: the reason carries only a code, and no failing response frame
+ * could be matched back to a sent command.
+ */
+const KNOWN_NOISE = [
+  /unhandled rejection: \{"code":"unknown_command"/,
+  /page error during [^:]*: Object$/,
+];
+let knownNoise = 0;
+const record = (message) => {
+  const known =
+    KNOWN_NOISE.some((re) => re.test(message)) ||
+    (phase === "boot" && KNOWN_BOOT_NOISE.some((re) => re.test(message)));
+  if (known) {
+    knownNoise += 1;
+    return;
+  }
+  warnings.push(message);
+};
+
 function expect(condition, message) {
   if (condition) console.log(`ok: ${message}`);
   else failures.push(message);
@@ -505,12 +558,70 @@ try {
     );
 
     const page = await context.newPage();
+    // A rejection whose reason is not an Error arrives as the bare message
+    // "Object", which says nothing at all. Serialising it in the page is the
+    // only place the reason's own properties are still reachable.
+    await page.addInitScript(() => {
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason;
+        if (reason instanceof Error) return;
+        let detail;
+        try {
+          detail = JSON.stringify(
+            reason,
+            reason && typeof reason === "object"
+              ? Object.getOwnPropertyNames(reason)
+              : undefined,
+          );
+        } catch {
+          detail = String(reason);
+        }
+        console.error(`unhandled rejection: ${detail}`);
+      });
+    });
+    // Which websocket command a rejection came from. The reason carries only a
+    // code and a message, so the failing response is matched back to the
+    // command that was sent by its id.
+    if (process.env.DIAGNOSE_ERRORS === "1") {
+      page.on("websocket", (ws) => {
+        const sent = new Map();
+        ws.on("framesent", ({ payload }) => {
+          try {
+            const message = JSON.parse(payload.toString());
+            if (message.id) sent.set(message.id, message.type);
+          } catch {}
+        });
+        ws.on("framereceived", ({ payload }) => {
+          try {
+            const message = JSON.parse(payload.toString());
+            if (message.success === false) {
+              record(
+                `websocket command "${sent.get(message.id) ?? "?"}" failed: ${message.error?.code} (during ${phase})`,
+              );
+            }
+          } catch {}
+        });
+      });
+    }
+    page.on("console", (message) => {
+      if (message.type() !== "error") return;
+      const text = message.text();
+      if (text.startsWith("unhandled rejection:")) {
+        record(`${text} (during ${phase})`);
+      }
+    });
     page.on("pageerror", (error) => {
       // The first stack frame says which component threw, which a bare message
       // does not.
-      const frame = (error?.stack ?? "").split("\n")[1]?.trim() ?? "";
-      warnings.push(
-        `page error: ${error?.message || JSON.stringify(error)}${frame ? ` (${frame})` : ""}`,
+      const frames = (error?.stack ?? "")
+        .split("\n")
+        .slice(1, process.env.DIAGNOSE_ERRORS === "1" ? 8 : 2)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      record(
+        `page error during ${phase}: ${error?.message || JSON.stringify(error)}${
+          frames.length ? ` (${frames.join(" <- ")})` : ""
+        }`,
       );
     });
 
@@ -1152,6 +1263,7 @@ try {
     // the custom row above the stock rows it is modelled on, and the edge cases
     // beside them. Four separate element shots said the same thing in pieces.
     const overview = `${OUT_DIR}/overview-${HA_VERSION}-${colorScheme}.png`;
+    setPhase(`overview capture (${colorScheme})`);
     await captureOverview(page, overview);
     console.log(`saved ${overview}`);
 
@@ -1160,6 +1272,7 @@ try {
     // since it takes its layout from the styling Home Assistant sets at the
     // root, which is why the first attempt at this capture had blank rows where
     // the two pickers should be.
+    setPhase(`editor mount (${colorScheme})`);
     await page.evaluate(async () => {
       const root = document.querySelector("home-assistant").shadowRoot;
       const host = document.createElement("div");
@@ -1654,6 +1767,12 @@ try {
   }
 } finally {
   await browser.close();
+}
+
+if (knownNoise) {
+  console.log(
+    `\nignored ${knownNoise} known Home Assistant error(s) — see KNOWN_NOISE and KNOWN_BOOT_NOISE`,
+  );
 }
 
 for (const warning of warnings) console.warn(`warning: ${warning}`);
