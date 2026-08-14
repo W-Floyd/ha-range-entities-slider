@@ -10,6 +10,14 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ## [Unreleased]
 
+### Changed
+
+- Build toolchain moved to esbuild 0.28 and TypeScript 7, and the workflows to
+  the current major of each action they use (checkout 7, cache 6, upload 7,
+  download 8). Nothing the card ships depends on any of it — lit,
+  custom-card-helpers and home-assistant-js-websocket were already current — and
+  the bundle it produces still passes the render against Home Assistant stable.
+
 ## [1.0.1] - 2026-08-14
 
 ### Fixed

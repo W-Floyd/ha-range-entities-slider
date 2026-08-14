@@ -34,7 +34,7 @@ jobs:
       matrix:
         ha_version: ${{ fromJSON(inputs.ha_versions || '["stable", "beta"]') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Keyed on what the packs currently point at, so a theme release fetches
       # the new tarball. Tarballs are named per commit, so a partial restore
@@ -52,7 +52,7 @@ jobs:
 
       - name: Cache theme downloads
         if: inputs.sweep
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tests/.theme-cache
           key: themes-${{ steps.themes.outputs.key }}
@@ -70,7 +70,7 @@ jobs:
           echo "key=$(tests/render.sh --fingerprint ${{ matrix.ha_version }})" >> "$GITHUB_OUTPUT"
 
       - name: Restore an identical render
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             tests/screenshots
@@ -86,7 +86,7 @@ jobs:
 
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.artifact_prefix || 'screenshots' }}-${{ matrix.ha_version }}
           path: tests/screenshots/
