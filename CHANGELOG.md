@@ -10,6 +10,8 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-08-14
+
 ### Fixed
 
 - The held-handle styling is applied reliably rather than only when the value
@@ -276,7 +278,8 @@ promotes that section to the new version and refuses to run if it is empty.
   `[Unreleased]` section to the new version and `just release` publishes it as
   the GitHub release notes.
 
-[unreleased]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.2...HEAD
+[unreleased]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v0.1.0...v1.0.0
