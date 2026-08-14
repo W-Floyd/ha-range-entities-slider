@@ -12,6 +12,14 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ### Changed
 
+- A theme whose modes are shipped as two themes rather than declared with
+  `modes:` — "Frosted Glass" and "Frosted Glass Dark", "Graphite" and "Graphite
+  Light", `ios-light-mode-light-blue` and `ios-dark-mode-dark-blue` — is captured
+  once per half, in the scheme that half is the theme for, and shown as one
+  entry that follows the reader. 16 gallery entries and 25 captures become 13 and
+  24, and the captures that go are the ones showing a light theme forced dark and
+  a dark theme forced light.
+
 - Build toolchain moved to esbuild 0.28 and TypeScript 7, and the workflows to
   the current major of each action they use (checkout 7, cache 6, upload 7,
   download 8). Nothing the card ships depends on any of it — lit,

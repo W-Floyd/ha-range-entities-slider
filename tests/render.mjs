@@ -185,6 +185,75 @@ async function getThemes(token) {
   });
 }
 
+/**
+ * Themes that are one theme's two modes shipped under two names, rather than a
+ * theme declaring `modes: {light, dark}` for Home Assistant to pick between:
+ * "Frosted Glass" and "Frosted Glass Dark", "Graphite" and "Graphite Light",
+ * "ios-light-mode-light-blue" and "ios-dark-mode-dark-blue".
+ *
+ * Each is captured only in the scheme it is the theme for, and the pair is
+ * reported as one theme. Without this a pair costs up to four captures, of which
+ * two show a light theme forced dark and a dark theme forced light — states no
+ * one using the theme ever sees.
+ *
+ * Paired on the name with every light and dark word dropped: what is left has to
+ * match, and the two have to disagree about which they are. A name carrying
+ * neither word takes the opposite of its sibling, so "Frosted Glass" is the
+ * light one beside "Frosted Glass Dark" and "Graphite" the dark one beside
+ * "Graphite Light".
+ */
+function pairThemes(names) {
+  const words = (name) => name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const polarity = (name) => {
+    const list = words(name);
+    const light = list.filter((word) => word === "light").length;
+    const dark = list.filter((word) => word === "dark").length;
+    if (light > dark) return "light";
+    if (dark > light) return "dark";
+    return null;
+  };
+  const key = (name) =>
+    words(name)
+      .filter((word) => word !== "light" && word !== "dark")
+      .join("-");
+
+  const groups = new Map();
+  for (const name of names) {
+    const group = groups.get(key(name)) ?? [];
+    group.push(name);
+    groups.set(key(name), group);
+  }
+
+  const pairs = new Map();
+  for (const group of groups.values()) {
+    if (group.length !== 2) continue;
+    const [a, b] = group;
+    let [first, second] = [polarity(a), polarity(b)];
+    // Exactly one may be unstated, and it takes the other's opposite. Two
+    // unstated names cannot be a light/dark pair, and two that agree are two
+    // variants of the same mode.
+    if (first === null && second === null) continue;
+    if (first === second) continue;
+    first ??= second === "dark" ? "light" : "dark";
+    second ??= first === "dark" ? "light" : "dark";
+
+    // Named for what the two share: "Frosted Glass Dark" beside "Frosted Glass"
+    // gives "Frosted Glass", and the ios pair gives "ios".
+    let shared = "";
+    while (
+      shared.length < Math.min(a.length, b.length) &&
+      a[shared.length].toLowerCase() === b[shared.length].toLowerCase()
+    ) {
+      shared += a[shared.length];
+    }
+    shared = shared.replace(/[^A-Za-z0-9]+$/, "");
+    const label = shared || `${a} / ${b}`;
+    pairs.set(a, { label, scheme: first, sibling: b });
+    pairs.set(b, { label, scheme: second, sibling: a });
+  }
+  return pairs;
+}
+
 async function setTheme(token, name) {
   const response = await fetch(`${HA_URL}/api/services/frontend/set_theme`, {
     method: "POST",
@@ -1386,6 +1455,19 @@ try {
       warnings.push("theme sweep requested but no themes matched");
     }
 
+    // Only pairs where both halves are being swept: with a THEME_FILTER naming
+    // one of them, that theme is on its own again and is captured in both.
+    const pairs = pairThemes(themes.map(({ name }) => name));
+    if (pairs.size) {
+      const listed = new Set();
+      const summary = [...pairs.entries()]
+        .filter(([name]) => !listed.has(name) && listed.add(pairs.get(name).sibling))
+        .map(([name, pair]) => `${pair.label} (${name} + ${pair.sibling})`);
+      console.log(
+        `\n${summary.length} theme(s) ship their modes as two themes, each captured in its own scheme: ${summary.join(", ")}`,
+      );
+    }
+
     const themeDir = `${OUT_DIR}/themes`;
     mkdirSync(themeDir, { recursive: true });
     const results = [];
@@ -1444,9 +1526,14 @@ try {
       const page = await context.newPage();
 
       for (const { name: theme, hasModes } of themes) {
+        // Half of a pair shipped as two themes: it is only the theme for one
+        // scheme, and its sibling covers the other.
+        const pair = pairs.get(theme);
+        if (pair && pair.scheme !== colorScheme) continue;
+
         // A theme that declares no light/dark modes of its own cannot render
         // differently, so skip the second pass without even loading it.
-        if (colorScheme === "dark" && !hasModes) {
+        if (!pair && colorScheme === "dark" && !hasModes) {
           skipped.push(theme);
           markStatic(theme);
           continue;
@@ -1533,10 +1620,17 @@ try {
           }
         }
 
-        const slug = theme.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        // A pair is named for the theme it is, not for the half that drew it:
+        // "Graphite" and "Graphite Light" write graphite-dark.png and
+        // graphite-light.png rather than graphite-dark.png and
+        // graphite-light-light.png.
+        const slug = (pair?.label ?? theme)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-");
         const suffix = `-${colorScheme}`;
         results.push({
           theme,
+          pair: pair?.label,
           colorScheme,
           file: `${slug}${suffix}.png`,
           dragShape,
@@ -1732,7 +1826,15 @@ try {
       `${JSON.stringify(
         results
           .filter((r) => r.file && !r.error)
-          .map(({ file, theme, colorScheme }) => ({ file, theme, colorScheme })),
+          .map(({ file, theme, pair, colorScheme }) => ({
+            file,
+            theme,
+            // The name the two halves of a pair share, which is the theme a
+            // reader recognises: the capture from "Graphite Light" is Graphite
+            // in light mode as far as the gallery is concerned.
+            ...(pair ? { pair } : {}),
+            colorScheme,
+          })),
         null,
         2,
       )}\n`,

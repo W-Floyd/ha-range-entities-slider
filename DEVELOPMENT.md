@@ -107,6 +107,17 @@ outright, or declares light and dark modes with identical values, is captured on
 carries no mode suffix. That is decided by comparing how the theme actually resolves, not just what it
 declares, and the run reports which themes were captured once.
 
+Some packs ship a theme's two modes as two themes rather than declaring `modes:` for Home Assistant
+to choose between — "Frosted Glass" and "Frosted Glass Dark", "Graphite" and "Graphite Light",
+`ios-light-mode-light-blue` and `ios-dark-mode-dark-blue`. Those are paired on the name with every
+light and dark word dropped: what is left has to match and the two have to disagree about which they
+are, with an unstated name taking its sibling's opposite, so Frosted Glass is the light one and
+Graphite the dark one. Each half is captured only in the scheme it is the theme for and the pair is
+reported and published as one theme, which is what turned 16 gallery entries and 25 captures into 13
+and 24 — the four it dropped were a light theme forced dark and a dark theme forced light, states
+nobody using the theme sees. A `THEME_FILTER` naming only one half leaves it unpaired and captured in
+both.
+
 Theme tarballs are cached in `tests/.theme-cache` (gitignored) under the commit each pack currently
 points at, resolved with `git ls-remote`, so an upstream release fetches a new file and an unchanged
 pack is never downloaded twice. `GITHUB_TOKEN` raises the API rate limit, and CI passes one

@@ -105,11 +105,15 @@ if (themes.length) {
   // identically, so it stands for both.
   // Grouped by theme, so a theme with separate modes becomes one image that
   // follows the reader rather than two stacked side by side.
+  // A theme that ships its modes as two themes — "Frosted Glass" and "Frosted
+  // Glass Dark" — is recorded with the name the two share, and groups under it
+  // as one entry the same way a theme with its own modes does.
   const byTheme = new Map();
   for (const entry of manifest) {
-    const modes = byTheme.get(entry.theme) ?? {};
+    const name = entry.pair ?? entry.theme;
+    const modes = byTheme.get(name) ?? {};
     modes[entry.colorScheme] = `theme-${entry.file}`;
-    byTheme.set(entry.theme, modes);
+    byTheme.set(name, modes);
   }
   const packs = byTheme.size
     ? [...byTheme.entries()]
