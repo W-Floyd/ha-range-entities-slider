@@ -10,6 +10,14 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ## [Unreleased]
 
+### Fixed
+
+- The screenshot artifact is named as the release job expects again. Adding the
+  browser matrix suffixed every artifact, Chromium's included, because an empty
+  string is falsy in a GitHub expression and `browser == 'chromium' && '' || …`
+  therefore always takes the suffix — so v1.0.2 and v1.0.3 published without their
+  screenshots or gallery.
+
 ## [1.0.3] - 2026-08-14
 
 ### Fixed

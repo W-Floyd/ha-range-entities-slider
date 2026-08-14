@@ -106,10 +106,15 @@ jobs:
 
       # Chromium keeps the plain name: release.yml downloads it by name, and the
       # screenshots the README and the releases show are its.
+      #
+      # Written as "not chromium and a suffix, or nothing", not "chromium and
+      # nothing, or a suffix": an empty string is falsy in these expressions, so
+      # the second form falls through to the suffix every time and publish could
+      # not find the artifact it wanted.
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.artifact_prefix || 'screenshots' }}-${{ matrix.ha_version }}${{ matrix.browser == 'chromium' && '' || format('-{0}', matrix.browser) }}
+          name: ${{ inputs.artifact_prefix || 'screenshots' }}-${{ matrix.ha_version }}${{ matrix.browser != 'chromium' && format('-{0}', matrix.browser) || '' }}
           path: tests/screenshots/
           if-no-files-found: warn
