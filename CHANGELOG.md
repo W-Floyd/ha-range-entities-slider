@@ -10,6 +10,8 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-18
+
 ### Added
 
 - Tapping either value opens the more-info dialog for the entity behind it —
@@ -302,7 +304,8 @@ promotes that section to the new version and refuses to run if it is empty.
   `[Unreleased]` section to the new version and `just release` publishes it as
   the GitHub release notes.
 
-[unreleased]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.4...HEAD
+[unreleased]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.4...v1.1.0
 [1.0.4]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/W-Floyd/ha-range-entities-slider/compare/v1.0.1...v1.0.2
