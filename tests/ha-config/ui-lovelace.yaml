@@ -56,6 +56,14 @@ views:
             range_entity: input_number.narrow_high
             name: Mismatched ranges
           - type: custom:range-entity-row
+            entity: input_number.action_low
+            range_entity: input_number.action_high
+            name: Value actions
+            value_tap_action:
+              action: none
+            range_value_hold_action:
+              action: more-info
+          - type: custom:range-entity-row
             entity: number.number_offline
             range_entity: number.number_high
             name: Unavailable entity

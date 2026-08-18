@@ -13,6 +13,7 @@
  *     icon: mdi:thermometer                 # optional
  *     warn_inverted: false                  # optional
  */
+import { handleAction, hasAction } from "custom-card-helpers";
 import type { HomeAssistant } from "custom-card-helpers";
 import type { HassEntity } from "home-assistant-js-websocket";
 import { LitElement, html, css, nothing } from "lit";
@@ -20,16 +21,24 @@ import type { PropertyValues, TemplateResult } from "lit";
 import "./editor.js";
 import { RANGE_SLIDER_STYLE_ID, thumbCss } from "./thumb-styles.js";
 import type {
+  Actions,
   GenericRowConfig,
   Range,
   RangeEntityRowConfig,
   RangeSlider,
+  ValueEnd,
 } from "./types.js";
 
 /** Single source of truth for the version; bumped by `just bump`. */
 export const VERSION = "1.0.4";
 
 const SUPPORTED_DOMAINS = ["input_number", "number"];
+
+/** How long a press has to last to count as a hold, as the frontend has it. */
+const HOLD_MS = 500;
+
+/** How long a tap waits for a second one, as the frontend has it. */
+const DOUBLE_TAP_MS = 250;
 
 export class RangeEntityRow extends LitElement {
   /**
@@ -321,11 +330,174 @@ export class RangeEntityRow extends LitElement {
               ></ha-icon>`
             : nothing}
           <span class="state ${inverted ? "inverted-warning" : ""}"
-            >${lower}<br />${upper}</span
+            >${this._renderValue("lower", lower)}<br />${this._renderValue(
+              "upper",
+              upper,
+            )}</span
           >
         </div>
       </hui-generic-entity-row>
     `;
+  }
+
+  // ── Value actions ───────────────────────────────────────────────────────────
+
+  /**
+   * One readout, wired to its own actions.
+   *
+   * The two values stand for two separate entities, so each is its own target:
+   * tapping one opens that entity's more-info dialog, which is what the stock
+   * rows do when their state is tapped, and what a row holding two entities has
+   * no other way to offer.
+   */
+  private _renderValue(end: ValueEnd, text: string): TemplateResult {
+    const actions = this._valueActions(end);
+    // An explicit `action: none` on the tap means the value is not a control,
+    // so it should not invite a click or take focus. Anything else — including
+    // the default — is interactive.
+    const interactive =
+      actions.tap_action?.action !== "none" ||
+      hasAction(actions.hold_action) ||
+      hasAction(actions.double_tap_action);
+
+    return html`<span
+      class="value ${interactive ? "interactive" : ""}"
+      data-end=${end}
+      role=${interactive ? "button" : nothing}
+      tabindex=${interactive ? "0" : nothing}
+      @pointerdown=${interactive ? this._onValuePointerDown : nothing}
+      @pointerup=${interactive ? this._cancelHold : nothing}
+      @pointercancel=${interactive ? this._cancelHold : nothing}
+      @pointerleave=${interactive ? this._cancelHold : nothing}
+      @click=${interactive ? this._onValueClick : nothing}
+      @keydown=${interactive ? this._onValueKeydown : nothing}
+      >${text}</span
+    >`;
+  }
+
+  /** The actions configured for one readout, absent keys left absent. */
+  private _valueActions(end: ValueEnd): Actions {
+    const config = this.config!;
+    const actions: Actions = {};
+    const [tap, hold, doubleTap] =
+      end === "lower"
+        ? [
+            config.value_tap_action,
+            config.value_hold_action,
+            config.value_double_tap_action,
+          ]
+        : [
+            config.range_value_tap_action,
+            config.range_value_hold_action,
+            config.range_value_double_tap_action,
+          ];
+    if (tap !== undefined) actions.tap_action = tap;
+    if (hold !== undefined) actions.hold_action = hold;
+    if (doubleTap !== undefined) actions.double_tap_action = doubleTap;
+    return actions;
+  }
+
+  /** The entity a gesture on one readout acts on. */
+  private _valueEntity(end: ValueEnd): string {
+    const config = this.config!;
+    return end === "lower" ? config.entity : config.range_entity;
+  }
+
+  private _holdTimer?: number;
+
+  private _doubleTapTimer?: number;
+
+  /** Set once a hold has fired, so the click that follows it is swallowed. */
+  private _heldFired = false;
+
+  /**
+   * Tap, hold and double-tap, timed as the frontend's own action-handler times
+   * them. That element is internal to the frontend rather than something a
+   * custom row can import, and its behaviour is short enough to mirror: only
+   * gestures the config actually asks for are watched for, so a value with no
+   * hold action responds to a press immediately.
+   */
+  private _onValuePointerDown(event: PointerEvent): void {
+    const end = this._endOf(event);
+    if (!end) return;
+    this._heldFired = false;
+    if (!hasAction(this._valueActions(end).hold_action)) return;
+    clearTimeout(this._holdTimer);
+    this._holdTimer = window.setTimeout(() => {
+      this._heldFired = true;
+      this._runValueAction(end, "hold");
+    }, HOLD_MS);
+  }
+
+  private _cancelHold(): void {
+    clearTimeout(this._holdTimer);
+    this._holdTimer = undefined;
+  }
+
+  private _onValueClick(event: MouseEvent): void {
+    // The row around the readout has its own actions; a gesture aimed at one
+    // value should not also count as one on the row.
+    event.stopPropagation();
+    this._cancelHold();
+    const end = this._endOf(event);
+    if (!end) return;
+    if (this._heldFired) {
+      this._heldFired = false;
+      return;
+    }
+
+    // A tap only has to wait when a double tap is configured; otherwise it
+    // would add a quarter-second of nothing to every tap.
+    if (!hasAction(this._valueActions(end).double_tap_action)) {
+      this._runValueAction(end, "tap");
+      return;
+    }
+    if (this._doubleTapTimer) {
+      clearTimeout(this._doubleTapTimer);
+      this._doubleTapTimer = undefined;
+      this._runValueAction(end, "double_tap");
+      return;
+    }
+    this._doubleTapTimer = window.setTimeout(() => {
+      this._doubleTapTimer = undefined;
+      this._runValueAction(end, "tap");
+    }, DOUBLE_TAP_MS);
+  }
+
+  /** A focused readout is a button, so it answers to Enter and Space too. */
+  private _onValueKeydown(event: KeyboardEvent): void {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const end = this._endOf(event);
+    if (end) this._runValueAction(end, "tap");
+  }
+
+  private _endOf(event: Event): ValueEnd | undefined {
+    const end = (event.currentTarget as HTMLElement | null)?.dataset["end"];
+    return end === "lower" || end === "upper" ? end : undefined;
+  }
+
+  private _runValueAction(
+    end: ValueEnd,
+    action: "tap" | "hold" | "double_tap",
+  ): void {
+    if (!this.hass || !this.config) return;
+    const actions = this._valueActions(end);
+    const actionConfig =
+      action === "hold"
+        ? actions.hold_action
+        : action === "double_tap"
+          ? actions.double_tap_action
+          : actions.tap_action;
+
+    // handleAction resolves more-info from the config's entity rather than the
+    // action's own, so a more-info action naming a third entity is honoured by
+    // handing it that entity instead of the readout's.
+    const entity =
+      (actionConfig as { entity?: string } | undefined)?.entity ??
+      this._valueEntity(end);
+    handleAction(this, this.hass, { ...actions, entity }, action);
   }
 
   /**
@@ -416,6 +588,8 @@ export class RangeEntityRow extends LitElement {
   override disconnectedCallback(): void {
     this._heldObserver?.disconnect();
     this._heldObserver = undefined;
+    clearTimeout(this._holdTimer);
+    clearTimeout(this._doubleTapTimer);
     super.disconnectedCallback();
   }
 
@@ -504,6 +678,16 @@ export class RangeEntityRow extends LitElement {
          a theme with a wide font would otherwise wrap the unit onto a third
          that the row height clips away. */
       white-space: nowrap;
+    }
+    .value.interactive {
+      cursor: pointer;
+      /* The readout keeps the stock row's look; only the focus ring is added,
+         since a keyboard user otherwise has no sign of what is focused. */
+      border-radius: 4px;
+      outline-offset: 2px;
+    }
+    .value.interactive:focus-visible {
+      outline: 2px solid var(--primary-color, #03a9f4);
     }
     .inverted-warning {
       color: var(--error-color, #db4437);

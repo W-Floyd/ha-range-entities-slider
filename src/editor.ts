@@ -20,8 +20,21 @@ const DOMAINS = ["input_number", "number"];
 interface SchemaEntry {
   name: string;
   required?: boolean;
-  selector: Record<string, unknown>;
+  /** Only "expandable" is used, for the collapsible action groups. */
+  type?: string;
+  /** Set on an expandable group so its keys stay at the top level. */
+  flatten?: boolean;
+  title?: string;
+  selector?: Record<string, unknown>;
+  schema?: SchemaEntry[];
 }
+
+/** The action trio Home Assistant offers on a card, for one target. */
+const actionSchema = (prefix: string): SchemaEntry[] =>
+  (["tap_action", "hold_action", "double_tap_action"] as const).map((name) => ({
+    name: `${prefix}${name}`,
+    selector: { ui_action: { default_action: "more-info" } },
+  }));
 
 const SCHEMA: SchemaEntry[] = [
   {
@@ -37,6 +50,30 @@ const SCHEMA: SchemaEntry[] = [
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
   { name: "warn_inverted", selector: { boolean: {} } },
+  // The three targets a gesture can land on are separate: the row's name and
+  // icon, which hui-generic-entity-row handles, and each of the two values,
+  // which stand for their own entity.
+  {
+    name: "row_interactions",
+    type: "expandable",
+    flatten: true,
+    title: "Name and icon actions",
+    schema: actionSchema(""),
+  },
+  {
+    name: "value_interactions",
+    type: "expandable",
+    flatten: true,
+    title: "Lower value actions",
+    schema: actionSchema("value_"),
+  },
+  {
+    name: "range_value_interactions",
+    type: "expandable",
+    flatten: true,
+    title: "Upper value actions",
+    schema: actionSchema("range_value_"),
+  },
 ];
 
 const LABELS: Record<string, string> = {
@@ -45,6 +82,18 @@ const LABELS: Record<string, string> = {
   name: "Name",
   icon: "Icon",
   warn_inverted: "Flag an upper value below the lower one",
+  row_interactions: "Name and icon actions",
+  value_interactions: "Lower value actions",
+  range_value_interactions: "Upper value actions",
+  tap_action: "Tap behavior",
+  hold_action: "Hold behavior",
+  double_tap_action: "Double tap behavior",
+  value_tap_action: "Tap behavior",
+  value_hold_action: "Hold behavior",
+  value_double_tap_action: "Double tap behavior",
+  range_value_tap_action: "Tap behavior",
+  range_value_hold_action: "Hold behavior",
+  range_value_double_tap_action: "Double tap behavior",
 };
 
 export class RangeEntityRowEditor extends LitElement {

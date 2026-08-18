@@ -194,6 +194,22 @@ input_number:
     step: 0.5
     initial: 28
 
+  # Behind the row whose value readouts are pointed at custom actions.
+  action_low:
+    name: Action Low
+    min: 0
+    max: 100
+    step: 1
+    initial: 25
+    unit_of_measurement: "%"
+  action_high:
+    name: Action High
+    min: 0
+    max: 100
+    step: 1
+    initial: 75
+    unit_of_measurement: "%"
+
   whole_low:
     name: Whole Low
     min: 0

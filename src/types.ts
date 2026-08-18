@@ -16,7 +16,25 @@ export interface RangeEntityRowConfig {
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
   double_tap_action?: ActionConfig;
+  /** The lower value readout; defaults to more-info on `entity`. */
+  value_tap_action?: ActionConfig;
+  value_hold_action?: ActionConfig;
+  value_double_tap_action?: ActionConfig;
+  /** The upper value readout; defaults to more-info on `range_entity`. */
+  range_value_tap_action?: ActionConfig;
+  range_value_hold_action?: ActionConfig;
+  range_value_double_tap_action?: ActionConfig;
 }
+
+/** The three actions one target responds to, as handleAction wants them. */
+export interface Actions {
+  tap_action?: ActionConfig;
+  hold_action?: ActionConfig;
+  double_tap_action?: ActionConfig;
+}
+
+/** Which of the two readouts a gesture landed on. */
+export type ValueEnd = "lower" | "upper";
 
 /** What hui-generic-entity-row is given, which is a subset of the above. */
 export interface GenericRowConfig {

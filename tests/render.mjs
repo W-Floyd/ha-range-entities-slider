@@ -952,6 +952,117 @@ try {
         `readout formats like the stock rows (${ourValues.join(" / ")} vs ${stockValues.join(" / ")})`,
       );
 
+      // Each value stands for its own entity, so tapping one should open that
+      // entity's more-info dialog — the only way a row holding two entities can
+      // offer what tapping a stock row's state does.
+      const valueTargets = await row.evaluate((el) =>
+        [...(el.shadowRoot?.querySelectorAll(".value") ?? [])].map((n) => ({
+          end: n.dataset.end,
+          role: n.getAttribute("role"),
+          tabindex: n.getAttribute("tabindex"),
+          cursor: getComputedStyle(n).cursor,
+        })),
+      );
+      console.log(`value targets: ${JSON.stringify(valueTargets)}`);
+      expect(
+        valueTargets.length === 2 &&
+          valueTargets[0].end === "lower" &&
+          valueTargets[1].end === "upper",
+        `each value is its own target (${JSON.stringify(valueTargets.map((v) => v.end))})`,
+      );
+      expect(
+        valueTargets.every((v) => v.role === "button" && v.tabindex === "0"),
+        `both values invite a tap and take focus (${JSON.stringify(valueTargets)})`,
+      );
+
+      // The dialog element outlives being closed, so whether it is up is read
+      // from the dialog inside it, and which entity it is showing from the
+      // internals it names it in — with the friendly name as the fallback.
+      const dialogState = async () => {
+        const dialog = page.locator("ha-more-info-dialog").first();
+        if (!(await dialog.count())) return { open: false };
+        return dialog.evaluate((d) => {
+          const entityId =
+            d._entityId ??
+            d.shadowRoot?.querySelector("ha-more-info-info")?.entityId ??
+            null;
+          const text = (d.shadowRoot?.textContent ?? "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 120);
+          // The element outlives being closed, but empties out: a dialog that is
+          // up names the entity it is showing and has rendered its content.
+          return { open: !!(entityId || text), entityId, text };
+        });
+      };
+      const openDialog = async (locator) => {
+        await locator.click();
+        await page.waitForTimeout(1200);
+        return dialogState();
+      };
+      const closeDialog = async () => {
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(1000);
+      };
+
+      const lowerDialog = await openDialog(row.locator('.value[data-end="lower"]'));
+      console.log(`lower value dialog: ${JSON.stringify(lowerDialog)}`);
+      expect(
+        lowerDialog.open &&
+          (lowerDialog.entityId === "input_number.drag_low" ||
+            lowerDialog.text.includes("Drag Low")),
+        `tapping the lower value opens its own entity (${lowerDialog?.entityId ?? lowerDialog?.text?.slice(0, 60) ?? "no dialog"})`,
+      );
+      await closeDialog();
+
+      const upperDialog = await openDialog(row.locator('.value[data-end="upper"]'));
+      console.log(`upper value dialog: ${JSON.stringify(upperDialog)}`);
+      expect(
+        upperDialog.open &&
+          (upperDialog.entityId === "input_number.drag_high" ||
+            upperDialog.text.includes("Drag High")),
+        `tapping the upper value opens the range entity (${upperDialog?.entityId ?? upperDialog?.text?.slice(0, 60) ?? "no dialog"})`,
+      );
+      await closeDialog();
+      const closed = await dialogState();
+      console.log(`after Escape: ${JSON.stringify(closed)}`);
+      expect(
+        !closed.open,
+        `the more-info dialog closes again, leaving the dashboard as it was (${JSON.stringify(closed)})`,
+      );
+
+      // The row configured with `value_tap_action: none` should leave its lower
+      // value inert, while the upper one keeps the default.
+      const rowNames = await page
+        .locator("range-entity-row")
+        .evaluateAll((rows) => rows.map((r) => r.config?.name ?? ""));
+      const actionRow = page
+        .locator("range-entity-row")
+        .nth(rowNames.indexOf("Value actions"));
+      const configured = await actionRow.evaluate((el) =>
+        [...(el.shadowRoot?.querySelectorAll(".value") ?? [])].map((n) => ({
+          end: n.dataset.end,
+          role: n.getAttribute("role"),
+          cursor: getComputedStyle(n).cursor,
+        })),
+      );
+      console.log(`configured value targets: ${JSON.stringify(configured)}`);
+      expect(
+        configured[0]?.role === null,
+        `value_tap_action: none leaves the value inert (${JSON.stringify(configured[0])})`,
+      );
+      expect(
+        configured[1]?.role === "button",
+        `the other value keeps its default action (${JSON.stringify(configured[1])})`,
+      );
+      await actionRow.locator('.value[data-end="lower"]').click();
+      await page.waitForTimeout(1000);
+      const afterInert = await dialogState();
+      expect(
+        !afterInert.open,
+        `tapping an inert value opens nothing (${JSON.stringify(afterInert)})`,
+      );
+
       // Boundary and degenerate pairs from the second card.
       const edges = await page.locator("range-entity-row").evaluateAll((rows) =>
         rows.map((el) => {
@@ -1095,8 +1206,46 @@ try {
         const toggles = {
           editor: describeSwitch(deepFind(element.shadowRoot, "ha-switch")),
         };
+
+        // The action groups are collapsible, so open them and see that Home
+        // Assistant's own action selector is what came up inside: `ui_action`
+        // is its selector name, and a name it no longer knows would render an
+        // empty group rather than fail.
+        const deepAll = (root, tag) => {
+          const found = [];
+          const stack = [root];
+          while (stack.length) {
+            const node = stack.pop();
+            if (node?.tagName?.toLowerCase() === tag) found.push(node);
+            stack.push(...(node?.children ?? []));
+            if (node?.shadowRoot) stack.push(node.shadowRoot);
+          }
+          return found;
+        };
+        const panels = deepAll(element.shadowRoot, "ha-expansion-panel");
+        for (const panel of panels) {
+          // ha-form-expandable renders its fields off this event rather than the
+          // panel's property, which is how the panel itself reports a click.
+          panel.dispatchEvent(
+            new CustomEvent("expanded-will-change", {
+              detail: { expanded: true },
+            }),
+          );
+          panel.expanded = true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        const actionSelectors = deepAll(element.shadowRoot, "hui-action-editor")
+          .length;
+        const insideGroups = Object.fromEntries(
+          ["ha-form", "ha-selector", "ha-selector-ui-action", "hui-action-editor"].map(
+            (tag) => [tag, deepAll(element.shadowRoot, tag).length],
+          ),
+        );
         const result = {
           toggles,
+          panels: panels.length,
+          actionSelectors,
+          insideGroups,
           supported: true,
           tag: element.tagName.toLowerCase(),
           hasForm: !!form,
@@ -1125,6 +1274,9 @@ try {
             "name",
             "icon",
             "warn_inverted",
+            "row_interactions",
+            "value_interactions",
+            "range_value_interactions",
           ]),
         `the editor covers every documented option (${editor.schema?.join(", ")})`,
       );
@@ -1133,6 +1285,16 @@ try {
           editor.emitted?.warn_inverted === false,
         `editing a field emits the new config (${JSON.stringify(editor.emitted)})`,
       );
+      // Three targets, each with its own tap/hold/double-tap trio.
+      expect(
+        editor.panels === 3,
+        `the editor groups the actions per target (${editor.panels} groups)`,
+      );
+      expect(
+        editor.actionSelectors === 9,
+        `every action is Home Assistant's own action editor (${editor.actionSelectors} of 9, saw ${JSON.stringify(editor.insideGroups)})`,
+      );
+
       // The controls should be Home Assistant's own, not hand-rolled: the same
       // ha-switch it uses everywhere else.
       expect(

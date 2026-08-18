@@ -10,6 +10,20 @@ promotes that section to the new version and refuses to run if it is empty.
 
 ## [Unreleased]
 
+### Added
+
+- Tapping either value opens the more-info dialog for the entity behind it —
+  `entity` for the lower readout, `range_entity` for the upper — which is what
+  tapping a stock row's state does and what a row holding two entities otherwise
+  had no way to offer.
+- `value_tap_action`, `value_hold_action`, `value_double_tap_action` and their
+  `range_value_` counterparts configure each readout with any Home Assistant
+  action config; the visual editor offers them in collapsible groups, alongside a
+  group for the row's own `tap_action`/`hold_action`/`double_tap_action`, which
+  were previously YAML-only.
+- The render checks that each value is its own target, that tapping one raises its
+  own entity's dialog, and that `action: none` leaves a value inert.
+
 ## [1.0.4] - 2026-08-14
 
 ### Fixed

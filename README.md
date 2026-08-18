@@ -45,6 +45,8 @@ your theme, name/icon overrides, and tap actions.
   the stock `input_number` row would
 - Handles stop at each other instead of pushing, and an inverted pair written from elsewhere is
   flagged rather than silently reordered
+- Each value readout opens its own entity's more-info dialog on tap, with tap, hold and double tap
+  configurable per value from YAML or the visual editor
 - Theme-aware handles: Home Assistant paints none on a range slider, so the row supplies them —
   bars under material-you, and the stock round knob everywhere else
 
@@ -119,19 +121,48 @@ input_number:
 
 The row has a visual editor, so it can be configured from the entities card's UI as well as in YAML.
 
-| Option              | Type   | Required | Description                                                        |
-| ------------------- | ------ | -------- | ------------------------------------------------------------------ |
-| `type`              | string | yes      | `custom:range-entity-row`                                          |
-| `entity`            | string | yes      | `input_number` or `number` entity backing the **lower** handle       |
-| `range_entity`      | string | yes      | `input_number` or `number` entity backing the **upper** handle       |
-| `name`              | string | no       | Overrides the row label                                            |
-| `warn_inverted`     | bool   | no       | Flag it when `range_entity` is below `entity` (default `true`)       |
-| `icon`              | string | no       | Overrides the row icon                                             |
-| `tap_action`        | object | no       | Standard Home Assistant action config, passed to the generic row    |
-| `hold_action`       | object | no       | Standard Home Assistant action config, passed to the generic row    |
-| `double_tap_action` | object | no       | Standard Home Assistant action config, passed to the generic row    |
+| Option                          | Type   | Required | Description                                                                   |
+| ------------------------------- | ------ | -------- | ----------------------------------------------------------------------------- |
+| `type`                          | string | yes      | `custom:range-entity-row`                                                     |
+| `entity`                        | string | yes      | `input_number` or `number` entity backing the **lower** handle                |
+| `range_entity`                  | string | yes      | `input_number` or `number` entity backing the **upper** handle                |
+| `name`                          | string | no       | Overrides the row label                                                       |
+| `warn_inverted`                 | bool   | no       | Flag it when `range_entity` is below `entity` (default `true`)                |
+| `icon`                          | string | no       | Overrides the row icon                                                        |
+| `tap_action`                    | object | no       | Action for the row's name and icon, passed to the generic row                 |
+| `hold_action`                   | object | no       | Action for the row's name and icon, passed to the generic row                 |
+| `double_tap_action`             | object | no       | Action for the row's name and icon, passed to the generic row                 |
+| `value_tap_action`              | object | no       | Action for the **lower** value readout (default: more info on `entity`)       |
+| `value_hold_action`             | object | no       | Hold action for the lower value readout                                       |
+| `value_double_tap_action`       | object | no       | Double tap action for the lower value readout                                 |
+| `range_value_tap_action`        | object | no       | Action for the **upper** value readout (default: more info on `range_entity`) |
+| `range_value_hold_action`       | object | no       | Hold action for the upper value readout                                       |
+| `range_value_double_tap_action` | object | no       | Double tap action for the upper value readout                                 |
 
 The name and icon default to those of the `entity` (lower handle) when not set.
+
+### Value actions
+
+Each of the two values is its own target: tapping one opens the more-info dialog for the entity
+behind it — `entity` for the lower value, `range_entity` for the upper — which is what tapping a
+stock row's state does, and the only way a row holding two entities can offer it for both. Hold and
+double tap do nothing until they are configured, so a plain tap stays immediate.
+
+Any Home Assistant action config works, per value, and the editor offers them as it does on a card:
+
+```yaml
+- type: custom:range-entity-row
+  entity: input_number.lower_temp
+  range_entity: input_number.upper_temp
+  value_tap_action:
+    action: none # the lower value stops responding to a tap
+  range_value_hold_action:
+    action: navigate
+    navigation_path: /lovelace/climate
+```
+
+`tap_action`, `hold_action` and `double_tap_action` remain the row's own, covering the name and icon,
+and are handed to `hui-generic-entity-row` as before.
 
 Values are formatted like the stock `input_number` row: decimal places come from each entity's own
 `step`, then the user's number format setting, then that entity's unit.
